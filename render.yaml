@@ -1,0 +1,20 @@
+# Render 部署蓝图（Blueprint）
+# 在 Render 中点击 New -> Blueprint，选择本仓库即可按此配置自动创建服务。
+services:
+  - type: web
+    name: discord-backend
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      # 固定 Node 版本（Next 15 需要 18.18+ / 20+）
+      - key: NODE_VERSION
+        value: 20.18.0
+      # Supabase 连接信息：在 Render 控制台里填写实际值（不会写入仓库）
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
