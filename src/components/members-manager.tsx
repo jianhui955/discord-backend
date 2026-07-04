@@ -14,6 +14,7 @@ import {
   type ActionState,
 } from "@/app/dashboard/members/actions";
 import { StatusBadge } from "@/components/status-badge";
+import { formatDateTime } from "@/lib/format";
 
 const ROLE_OPTIONS = Object.entries(ROLE_LABELS) as [MemberRole, string][];
 const STATUS_OPTIONS = Object.entries(STATUS_LABELS) as [MemberStatus, string][];
@@ -104,14 +105,8 @@ export function MembersManager({ members }: { members: Member[] }) {
                     <td className="px-5 py-3.5">
                       <StatusBadge status={m.status} label={STATUS_LABELS[m.status]} />
                     </td>
-                    <td className="px-5 py-3.5 text-slate-400">
-                      {new Date(m.created_at).toLocaleString("zh-CN", {
-                        year: "numeric",
-                        month: "2-digit",
-                        day: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                    <td className="px-5 py-3.5 text-slate-400" suppressHydrationWarning>
+                      {formatDateTime(m.created_at)}
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center justify-end gap-2">

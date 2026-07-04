@@ -6,6 +6,7 @@ import {
   deleteAuthUser,
   type UserActionState,
 } from "@/app/dashboard/users/actions";
+import { formatDateTime } from "@/lib/format";
 
 export type AuthUserRow = {
   id: string;
@@ -16,17 +17,6 @@ export type AuthUserRow = {
 };
 
 const initialState: UserActionState = {};
-
-function formatTime(value: string | null) {
-  if (!value) return "—";
-  return new Date(value).toLocaleString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 export function UsersManager({
   users,
@@ -151,11 +141,11 @@ export function UsersManager({
                             ) : null}
                           </div>
                         </td>
-                        <td className="px-5 py-3.5 text-slate-400">
-                          {formatTime(u.created_at)}
+                        <td className="px-5 py-3.5 text-slate-400" suppressHydrationWarning>
+                          {formatDateTime(u.created_at)}
                         </td>
-                        <td className="px-5 py-3.5 text-slate-400">
-                          {formatTime(u.last_sign_in_at)}
+                        <td className="px-5 py-3.5 text-slate-400" suppressHydrationWarning>
+                          {formatDateTime(u.last_sign_in_at)}
                         </td>
                         <td className="px-5 py-3.5">
                           <div className="flex justify-end">
