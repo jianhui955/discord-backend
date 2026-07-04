@@ -2,7 +2,7 @@
 # 在 Render 中点击 New -> Blueprint，选择本仓库即可按此配置自动创建服务。
 services:
   - type: web
-    name: discord-backend
+    name: baiyun-backend
     runtime: node
     plan: free
     region: singapore
