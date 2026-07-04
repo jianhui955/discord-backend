@@ -7,6 +7,7 @@
 - 🔐 **登录鉴权**：使用 Supabase Auth（邮箱 + 密码），中间件保护后台路由
 - 📊 **仪表盘**：成员数量、状态、角色等数据概览
 - 👥 **成员管理**：成员的新增、编辑、删除、搜索（完整 CRUD）
+- 🪪 **登录账号管理**：在后台直接创建 / 删除可登录的 Supabase Auth 账号（需 service_role 密钥）
 - 🎨 现代简洁的管理界面
 
 ## 技术栈
@@ -40,8 +41,13 @@ cp .env.local.example .env.local
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=xxxx
+NEXT_PUBLIC_SUPABASE_ANON_KEY=xxxx          # anon / public 公钥（会打包进前端）
+SUPABASE_SERVICE_ROLE_KEY=xxxx              # service_role 私钥（仅服务端，切勿加 NEXT_PUBLIC_）
 ```
+
+> ⚠️ **安全提醒**：`NEXT_PUBLIC_SUPABASE_ANON_KEY` 必须填 **anon / public** 公钥；`SUPABASE_SERVICE_ROLE_KEY` 才填 **service_role** 私钥，两者是不同的 key。绝对不要把 service_role 私钥填到任何带 `NEXT_PUBLIC_` 前缀的变量里，否则它会被打包进前端、任何访客都能拿到，等于整个数据库暴露。
+>
+> `SUPABASE_SERVICE_ROLE_KEY` 是可选的：不配置时后台其余功能正常，只是「登录账号」页无法直接创建用户（可改为去 Supabase 控制台手动建）。
 
 ### 3. 创建一个登录账户
 
@@ -67,12 +73,13 @@ src/
 │   ├── dashboard/
 │   │   ├── layout.tsx         # 后台布局（侧边栏 + 顶部栏，鉴权）
 │   │   ├── page.tsx           # 仪表盘
-│   │   └── members/           # 成员管理页 + CRUD Server Actions
+│   │   ├── members/           # 成员管理页 + CRUD Server Actions
+│   │   └── users/             # 登录账号管理页 + Server Actions（service_role）
 │   ├── layout.tsx
 │   └── page.tsx               # 根路径重定向到 /dashboard
 ├── components/                # 侧边栏、表格、弹窗、徽章等 UI 组件
 ├── lib/
-│   ├── supabase/              # Supabase 浏览器端 / 服务端 / 中间件客户端
+│   ├── supabase/              # Supabase 浏览器端 / 服务端 / 中间件 / admin 客户端
 │   └── types.ts               # 数据类型与中文标签
 └── middleware.ts              # 会话刷新 + 路由保护
 supabase/
