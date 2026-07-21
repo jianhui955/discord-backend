@@ -10,6 +10,7 @@ create table if not exists public.members (
   id         uuid primary key default gen_random_uuid(),
   username   text not null,
   email      text,
+  dob        date,
   role       text not null default 'member'
              check (role in ('admin', 'moderator', 'member')),
   status     text not null default 'active'
@@ -20,6 +21,9 @@ create table if not exists public.members (
 
 create index if not exists members_created_at_idx
   on public.members (created_at desc);
+
+-- 已有数据库若缺少 dob 列，执行以下语句：
+-- alter table public.members add column if not exists dob date;
 
 -- 开启行级安全
 alter table public.members enable row level security;

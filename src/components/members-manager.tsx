@@ -14,7 +14,7 @@ import {
   type ActionState,
 } from "@/app/dashboard/members/actions";
 import { StatusBadge } from "@/components/status-badge";
-import { formatDateTime } from "@/lib/format";
+import { formatDate, formatDateTime, toDateInputValue } from "@/lib/format";
 
 const ROLE_OPTIONS = Object.entries(ROLE_LABELS) as [MemberRole, string][];
 const STATUS_OPTIONS = Object.entries(STATUS_LABELS) as [MemberStatus, string][];
@@ -65,11 +65,12 @@ export function MembersManager({ members }: { members: Member[] }) {
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <div className="overflow-x-auto scrollbar-thin">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full min-w-[860px] text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <th className="px-5 py-3 font-medium">用户名</th>
                 <th className="px-5 py-3 font-medium">邮箱</th>
+                <th className="px-5 py-3 font-medium">生日</th>
                 <th className="px-5 py-3 font-medium">角色</th>
                 <th className="px-5 py-3 font-medium">状态</th>
                 <th className="px-5 py-3 font-medium">创建时间</th>
@@ -79,7 +80,7 @@ export function MembersManager({ members }: { members: Member[] }) {
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-12 text-center text-slate-400">
+                  <td colSpan={7} className="px-5 py-12 text-center text-slate-400">
                     没有匹配的成员
                   </td>
                 </tr>
@@ -98,6 +99,9 @@ export function MembersManager({ members }: { members: Member[] }) {
                     </td>
                     <td className="px-5 py-3.5 text-slate-500">
                       {m.email ?? "—"}
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-500" suppressHydrationWarning>
+                      {formatDate(m.dob)}
                     </td>
                     <td className="px-5 py-3.5 text-slate-600">
                       {ROLE_LABELS[m.role]}
@@ -218,6 +222,15 @@ function MemberModal({
               type="email"
               defaultValue={member?.email ?? ""}
               placeholder="name@example.com"
+              className={inputClass}
+            />
+          </Field>
+
+          <Field label="生日">
+            <input
+              name="dob"
+              type="date"
+              defaultValue={toDateInputValue(member?.dob)}
               className={inputClass}
             />
           </Field>

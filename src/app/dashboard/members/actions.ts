@@ -19,6 +19,7 @@ export async function upsertMember(
   const role = String(formData.get("role") ?? "member") as MemberRole;
   const status = String(formData.get("status") ?? "active") as MemberStatus;
   const note = String(formData.get("note") ?? "").trim();
+  const dobRaw = String(formData.get("dob") ?? "").trim();
 
   if (!username) {
     return { error: "用户名不能为空。" };
@@ -26,11 +27,15 @@ export async function upsertMember(
   if (!ROLES.includes(role) || !STATUSES.includes(status)) {
     return { error: "角色或状态取值非法。" };
   }
+  if (dobRaw && !/^\d{4}-\d{2}-\d{2}$/.test(dobRaw)) {
+    return { error: "生日格式无效，请使用 YYYY-MM-DD。" };
+  }
 
   const supabase = await createClient();
   const payload = {
     username,
     email: email || null,
+    dob: dobRaw || null,
     role,
     status,
     note: note || null,
