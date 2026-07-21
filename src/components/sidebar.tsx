@@ -37,6 +37,15 @@ const NAV: NavItem[] = [
       </svg>
     ),
   },
+  {
+    href: "/dashboard/birthday-reminders",
+    label: "生日提醒",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.171c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513m-3-4.243v9.87m-3-12v12m0 0-1.5-1.5M12 21.75l1.5-1.5M6.75 7.5h10.5a2.25 2.25 0 0 0 2.25-2.25v-.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+      </svg>
+    ),
+  },
 ];
 
 export function Sidebar() {

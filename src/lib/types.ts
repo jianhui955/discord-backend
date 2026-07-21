@@ -23,3 +23,19 @@ export const STATUS_LABELS: Record<MemberStatus, string> = {
   inactive: "未激活",
   banned: "已封禁",
 };
+
+export const BIRTHDAY_EVENT_CODE = "BIRTHDAY" as const;
+
+export interface EventRemind {
+  id: string;
+  event_code: string;
+  remind: boolean;
+  updated_at: string;
+}
+
+export interface BirthdayReminderTemplate {
+  id: string;
+  content: string;
+  status: boolean;
+  created_at: string;
+}

@@ -48,3 +48,51 @@ select * from (values
   ('dave',  'dave@example.com',  'member',    'banned',   '违规封禁')
 ) as seed(username, email, role, status, note)
 where not exists (select 1 from public.members);
+
+-- ============================================================
+-- 事件提醒开关（event_remind）
+-- ============================================================
+create table if not exists public.event_remind (
+  id          uuid primary key default gen_random_uuid(),
+  event_code  text not null unique,
+  remind      boolean not null default false,
+  updated_at  timestamptz not null default now()
+);
+
+alter table public.event_remind enable row level security;
+
+drop policy if exists "authenticated_full_access" on public.event_remind;
+create policy "authenticated_full_access"
+  on public.event_remind
+  for all
+  to authenticated
+  using (true)
+  with check (true);
+
+-- 生日提醒默认配置
+insert into public.event_remind (event_code, remind)
+values ('BIRTHDAY', false)
+on conflict (event_code) do nothing;
+
+-- ============================================================
+-- 生日提醒模板（birthday_reminder_templates）
+-- ============================================================
+create table if not exists public.birthday_reminder_templates (
+  id          uuid primary key default gen_random_uuid(),
+  content     text not null,
+  status      boolean not null default true,
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists birthday_reminder_templates_created_at_idx
+  on public.birthday_reminder_templates (created_at desc);
+
+alter table public.birthday_reminder_templates enable row level security;
+
+drop policy if exists "authenticated_full_access" on public.birthday_reminder_templates;
+create policy "authenticated_full_access"
+  on public.birthday_reminder_templates
+  for all
+  to authenticated
+  using (true)
+  with check (true);
