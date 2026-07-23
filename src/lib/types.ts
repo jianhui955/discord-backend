@@ -46,7 +46,32 @@ export interface Sticker {
   pic_discord_id: string;
 }
 
-/** Discord sticker CDN 缩略图 URL */
+/**
+ * Discord sticker 图片候选 URL（按优先级尝试）
+ * - 若 pic_discord_id 已是完整 URL，直接使用
+ * - PNG / APNG：cdn.discordapp.com
+ * - GIF：必须用 media.discordapp.net
+ */
+export function discordStickerUrlCandidates(discordIdRaw: string): string[] {
+  const id = String(discordIdRaw ?? "").trim();
+  if (!id) return [];
+
+  if (/^https?:\/\//i.test(id)) {
+    return [id];
+  }
+
+  return [
+    `https://cdn.discordapp.com/emojis/${id}.png?size=160&passthrough=false`,
+    `https://media.discordapp.net/emojis/${id}.png?size=160&passthrough=false`,
+    `https://media.discordapp.net/emojis/${id}.gif?size=160`,
+  ];
+}
+
+/** Discord sticker CDN 缩略图 URL（取第一个候选） */
 export function discordStickerUrl(discordId: string, size = 160): string {
-  return `https://cdn.discordapp.com/stickers/${discordId}.png?size=${size}&passthrough=false`;
+  const candidates = discordStickerUrlCandidates(discordId);
+  if (candidates[0]?.includes(".png")) {
+    return candidates[0].replace("size=160", `size=${size}`);
+  }
+  return candidates[0] ?? "";
 }

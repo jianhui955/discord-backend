@@ -9,7 +9,7 @@ import {
 } from "@/app/dashboard/birthday-reminders/actions";
 import { formatDateTime } from "@/lib/format";
 import {
-  discordStickerUrl,
+  discordStickerUrlCandidates,
   type BirthdayReminderTemplate,
   type Sticker,
 } from "@/lib/types";
@@ -351,18 +351,20 @@ function StickerButton({
   sticker: Sticker;
   onPick: (picCode: string) => void;
 }) {
-  const [failed, setFailed] = useState(false);
-  const [src, setSrc] = useState(discordStickerUrl(sticker.pic_discord_id));
+  const candidates = discordStickerUrlCandidates(sticker.pic_discord_id);
+  const [index, setIndex] = useState(0);
+  const failed = index >= candidates.length;
+  const src = candidates[index] ?? "";
 
   return (
     <button
       type="button"
-      title={`${sticker.pic_name}（${sticker.pic_code}）`}
+      title={`${sticker.pic_name}（${sticker.pic_code}）\nID: ${sticker.pic_discord_id}`}
       onClick={() => onPick(sticker.pic_code)}
       className="group flex flex-col items-center gap-1 rounded-lg border border-transparent bg-white p-1.5 transition hover:border-brand-300 hover:bg-brand-50 hover:shadow-sm"
     >
       <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md bg-slate-100">
-        {failed ? (
+        {failed || !src ? (
           <span className="px-1 text-center text-[10px] leading-tight text-slate-400">
             {sticker.pic_name || "?"}
           </span>
@@ -373,16 +375,8 @@ function StickerButton({
             alt={sticker.pic_name}
             className="h-12 w-12 object-contain"
             loading="lazy"
-            onError={() => {
-              // png 失败时尝试 webp（部分 Discord sticker 格式不同）
-              if (src.includes(".png")) {
-                setSrc(
-                  `https://cdn.discordapp.com/stickers/${sticker.pic_discord_id}.webp?size=160`,
-                );
-              } else {
-                setFailed(true);
-              }
-            }}
+            referrerPolicy="no-referrer"
+            onError={() => setIndex((i) => i + 1)}
           />
         )}
       </div>
