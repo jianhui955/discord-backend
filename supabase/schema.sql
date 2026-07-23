@@ -96,3 +96,19 @@ create policy "authenticated_full_access"
   to authenticated
   using (true)
   with check (true);
+
+-- ============================================================
+-- Discord Stickers（sticker）— 若已有表可跳过
+-- 用于生日提醒模板编辑时选择 sticker，点击后插入 pic_code
+-- ============================================================
+-- create table if not exists public.sticker (
+--   id               uuid primary key default gen_random_uuid(),
+--   pic_name         text not null,
+--   pic_code         text not null,
+--   pic_discord_id   text not null
+-- );
+--
+-- alter table public.sticker enable row level security;
+-- create policy "authenticated_full_access"
+--   on public.sticker for all to authenticated
+--   using (true) with check (true);

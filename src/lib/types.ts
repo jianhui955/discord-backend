@@ -39,3 +39,14 @@ export interface BirthdayReminderTemplate {
   status: boolean;
   created_at: string;
 }
+
+export interface Sticker {
+  pic_name: string;
+  pic_code: string;
+  pic_discord_id: string;
+}
+
+/** Discord sticker CDN 缩略图 URL */
+export function discordStickerUrl(discordId: string, size = 160): string {
+  return `https://cdn.discordapp.com/stickers/${discordId}.png?size=${size}&passthrough=false`;
+}

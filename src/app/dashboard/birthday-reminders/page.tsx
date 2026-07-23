@@ -4,6 +4,7 @@ import {
   BIRTHDAY_EVENT_CODE,
   type BirthdayReminderTemplate,
   type EventRemind,
+  type Sticker,
 } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function BirthdayRemindersPage() {
   const supabase = await createClient();
 
-  const [remindResult, templatesResult] = await Promise.all([
+  const [remindResult, templatesResult, stickersResult] = await Promise.all([
     supabase
       .from("event_remind")
       .select("*")
@@ -21,11 +22,17 @@ export default async function BirthdayRemindersPage() {
       .from("birthday_reminder_templates")
       .select("*")
       .order("created_at", { ascending: false }),
+    supabase
+      .from("sticker")
+      .select("pic_name, pic_code, pic_discord_id")
+      .order("pic_name", { ascending: true }),
   ]);
 
   const remindEnabled = (remindResult.data as EventRemind | null)?.remind ?? false;
   const templates = (templatesResult.data ?? []) as BirthdayReminderTemplate[];
-  const error = remindResult.error ?? templatesResult.error;
+  const stickers = (stickersResult.data ?? []) as Sticker[];
+  const error =
+    remindResult.error ?? templatesResult.error ?? stickersResult.error;
 
   return (
     <div className="space-y-6">
@@ -40,8 +47,7 @@ export default async function BirthdayRemindersPage() {
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           <p className="font-semibold">无法读取数据</p>
           <p className="mt-1">
-            {error.message}。请确认已在 Supabase 中执行{" "}
-            <code>supabase/schema.sql</code> 建表。
+            {error.message}。请确认已在 Supabase 中建好相关表，并正确配置环境变量。
           </p>
         </div>
       ) : null}
@@ -49,6 +55,7 @@ export default async function BirthdayRemindersPage() {
       <BirthdayRemindersManager
         remindEnabled={remindEnabled}
         templates={templates}
+        stickers={stickers}
       />
     </div>
   );

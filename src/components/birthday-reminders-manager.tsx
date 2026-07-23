@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import {
   deleteTemplate,
   toggleBirthdayRemind,
@@ -8,16 +8,22 @@ import {
   type ActionState,
 } from "@/app/dashboard/birthday-reminders/actions";
 import { formatDateTime } from "@/lib/format";
-import type { BirthdayReminderTemplate } from "@/lib/types";
+import {
+  discordStickerUrl,
+  type BirthdayReminderTemplate,
+  type Sticker,
+} from "@/lib/types";
 
 const initialState: ActionState = {};
 
 export function BirthdayRemindersManager({
   remindEnabled,
   templates,
+  stickers,
 }: {
   remindEnabled: boolean;
   templates: BirthdayReminderTemplate[];
+  stickers: Sticker[];
 }) {
   const [editing, setEditing] = useState<BirthdayReminderTemplate | null | undefined>(
     undefined,
@@ -100,6 +106,7 @@ export function BirthdayRemindersManager({
       {modalOpen ? (
         <TemplateModal
           template={editing ?? null}
+          stickers={stickers}
           onClose={() => setEditing(undefined)}
         />
       ) : null}
@@ -198,12 +205,16 @@ function DeleteTemplateButton({ id, preview }: { id: string; preview: string }) 
 
 function TemplateModal({
   template,
+  stickers,
   onClose,
 }: {
   template: BirthdayReminderTemplate | null;
+  stickers: Sticker[];
   onClose: () => void;
 }) {
   const [state, formAction, pending] = useActionState(upsertTemplate, initialState);
+  const [content, setContent] = useState(template?.content ?? "");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isEdit = !!template;
   const defaultStatus = template?.status ?? true;
 
@@ -211,14 +222,34 @@ function TemplateModal({
     if (state.success) onClose();
   }, [state.success, onClose]);
 
+  function insertPicCode(picCode: string) {
+    const el = textareaRef.current;
+    if (!el) {
+      setContent((prev) => `${prev}${picCode}`);
+      return;
+    }
+
+    const start = el.selectionStart ?? content.length;
+    const end = el.selectionEnd ?? content.length;
+    const next = content.slice(0, start) + picCode + content.slice(end);
+    setContent(next);
+
+    // 插入后把光标移到 pic_code 后面
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + picCode.length;
+      el.setSelectionRange(pos, pos);
+    });
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+      <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-6 py-4">
           <h2 className="text-lg font-semibold text-slate-900">
             {isEdit ? "编辑模板" : "新增模板"}
           </h2>
@@ -237,14 +268,42 @@ function TemplateModal({
 
           <Field label="模板内容" required>
             <textarea
+              ref={textareaRef}
               name="content"
               required
               rows={5}
-              defaultValue={template?.content ?? ""}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
               placeholder="例如：亲爱的 {{username}}，祝您生日快乐！您的生日是 {{dob}}。"
               className={`${inputClass} resize-none`}
             />
           </Field>
+
+          <div>
+            <p className="mb-1.5 text-sm font-medium text-slate-700">
+              Discord Sticker
+              <span className="ml-2 text-xs font-normal text-slate-400">
+                点击插入 pic_code
+              </span>
+            </p>
+            {stickers.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-sm text-slate-400">
+                暂无 sticker 数据（请确认 Supabase 的 sticker 表有记录）
+              </p>
+            ) : (
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2 scrollbar-thin">
+                <div className="grid grid-cols-5 gap-2 sm:grid-cols-6 md:grid-cols-8">
+                  {stickers.map((s) => (
+                    <StickerButton
+                      key={`${s.pic_discord_id}-${s.pic_code}`}
+                      sticker={s}
+                      onPick={insertPicCode}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           <Field label="状态">
             <select
@@ -282,6 +341,55 @@ function TemplateModal({
         </form>
       </div>
     </div>
+  );
+}
+
+function StickerButton({
+  sticker,
+  onPick,
+}: {
+  sticker: Sticker;
+  onPick: (picCode: string) => void;
+}) {
+  const [failed, setFailed] = useState(false);
+  const [src, setSrc] = useState(discordStickerUrl(sticker.pic_discord_id));
+
+  return (
+    <button
+      type="button"
+      title={`${sticker.pic_name}（${sticker.pic_code}）`}
+      onClick={() => onPick(sticker.pic_code)}
+      className="group flex flex-col items-center gap-1 rounded-lg border border-transparent bg-white p-1.5 transition hover:border-brand-300 hover:bg-brand-50 hover:shadow-sm"
+    >
+      <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md bg-slate-100">
+        {failed ? (
+          <span className="px-1 text-center text-[10px] leading-tight text-slate-400">
+            {sticker.pic_name || "?"}
+          </span>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={src}
+            alt={sticker.pic_name}
+            className="h-12 w-12 object-contain"
+            loading="lazy"
+            onError={() => {
+              // png 失败时尝试 webp（部分 Discord sticker 格式不同）
+              if (src.includes(".png")) {
+                setSrc(
+                  `https://cdn.discordapp.com/stickers/${sticker.pic_discord_id}.webp?size=160`,
+                );
+              } else {
+                setFailed(true);
+              }
+            }}
+          />
+        )}
+      </div>
+      <span className="w-full truncate text-[10px] text-slate-500 group-hover:text-brand-600">
+        {sticker.pic_name}
+      </span>
+    </button>
   );
 }
 
