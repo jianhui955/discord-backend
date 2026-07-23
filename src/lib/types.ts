@@ -47,10 +47,10 @@ export interface Sticker {
 }
 
 /**
- * Discord sticker 图片候选 URL（按优先级尝试）
- * - 若 pic_discord_id 已是完整 URL，直接使用
- * - PNG / APNG：cdn.discordapp.com
- * - GIF：必须用 media.discordapp.net
+ * Discord emoji / sticker 图片候选 URL
+ * 你的 pic_discord_id 实际是 emoji id：
+ *   https://cdn.discordapp.com/emojis/{id}.png?size=64
+ * 注意：ID 必须按字符串处理，不能转成 Number（会超过 JS 安全整数丢精度）
  */
 export function discordStickerUrlCandidates(discordIdRaw: string): string[] {
   const id = String(discordIdRaw ?? "").trim();
@@ -61,17 +61,19 @@ export function discordStickerUrlCandidates(discordIdRaw: string): string[] {
   }
 
   return [
-    `https://cdn.discordapp.com/emojis/${id}.png?size=160&passthrough=false`,
-    `https://media.discordapp.net/emojis/${id}.png?size=160&passthrough=false`,
-    `https://media.discordapp.net/emojis/${id}.gif?size=160`,
+    `https://cdn.discordapp.com/emojis/${id}.png?size=64`,
+    `https://cdn.discordapp.com/emojis/${id}.webp?size=64`,
+    `https://cdn.discordapp.com/emojis/${id}.gif?size=64`,
+    `https://media.discordapp.net/emojis/${id}.png?size=64`,
+    `https://cdn.discordapp.com/stickers/${id}.png?size=160&passthrough=false`,
+    `https://media.discordapp.net/stickers/${id}.gif?size=160`,
   ];
 }
 
-/** Discord sticker CDN 缩略图 URL（取第一个候选） */
-export function discordStickerUrl(discordId: string, size = 160): string {
-  const candidates = discordStickerUrlCandidates(discordId);
-  if (candidates[0]?.includes(".png")) {
-    return candidates[0].replace("size=160", `size=${size}`);
-  }
-  return candidates[0] ?? "";
+/** Discord 缩略图 URL（优先 emoji png） */
+export function discordStickerUrl(discordId: string, size = 64): string {
+  const id = String(discordId ?? "").trim();
+  if (!id) return "";
+  if (/^https?:\/\//i.test(id)) return id;
+  return `https://cdn.discordapp.com/emojis/${id}.png?size=${size}`;
 }

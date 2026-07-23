@@ -365,8 +365,10 @@ function StickerButton({
     >
       <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md bg-slate-100">
         {failed || !src ? (
-          <span className="px-1 text-center text-[10px] leading-tight text-slate-400">
+          <span className="px-1 text-center text-[9px] leading-tight text-slate-400">
             {sticker.pic_name || "?"}
+            <br />
+            <span className="text-[8px] text-red-400">{sticker.pic_discord_id}</span>
           </span>
         ) : (
           // eslint-disable-next-line @next/next/no-img-element

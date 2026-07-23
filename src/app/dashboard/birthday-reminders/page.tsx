@@ -24,13 +24,19 @@ export default async function BirthdayRemindersPage() {
       .order("created_at", { ascending: false }),
     supabase
       .from("sticker")
+      // pic_discord_id 若是 bigint，JSON 传到 JS 会丢精度，务必在 DB 用 text 存
       .select("pic_name, pic_code, pic_discord_id")
       .order("pic_name", { ascending: true }),
   ]);
 
   const remindEnabled = (remindResult.data as EventRemind | null)?.remind ?? false;
   const templates = (templatesResult.data ?? []) as BirthdayReminderTemplate[];
-  const stickers = (stickersResult.data ?? []) as Sticker[];
+  const stickers = ((stickersResult.data ?? []) as Sticker[]).map((s) => ({
+    pic_name: String(s.pic_name ?? ""),
+    pic_code: String(s.pic_code ?? ""),
+    // 必须保持字符串：Discord snowflake 会超过 Number.MAX_SAFE_INTEGER
+    pic_discord_id: String(s.pic_discord_id ?? "").trim(),
+  }));
   const error =
     remindResult.error ?? templatesResult.error ?? stickersResult.error;
 
