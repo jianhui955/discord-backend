@@ -56,8 +56,12 @@ create table if not exists public.event_remind (
   id          uuid primary key default gen_random_uuid(),
   event_code  text not null unique,
   remind      boolean not null default false,
+  channel_id  text,
   updated_at  timestamptz not null default now()
 );
+
+-- 已有数据库若缺少 channel_id 列：
+-- alter table public.event_remind add column if not exists channel_id text;
 
 alter table public.event_remind enable row level security;
 

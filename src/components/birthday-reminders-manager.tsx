@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import {
   deleteTemplate,
   toggleBirthdayRemind,
+  updateBirthdayChannel,
   upsertTemplate,
   type ActionState,
 } from "@/app/dashboard/birthday-reminders/actions";
@@ -11,6 +12,7 @@ import { formatDateTime } from "@/lib/format";
 import {
   discordStickerUrlCandidates,
   type BirthdayReminderTemplate,
+  type Channel,
   type Sticker,
 } from "@/lib/types";
 
@@ -18,10 +20,14 @@ const initialState: ActionState = {};
 
 export function BirthdayRemindersManager({
   remindEnabled,
+  selectedChannelId,
+  channels,
   templates,
   stickers,
 }: {
   remindEnabled: boolean;
+  selectedChannelId: string;
+  channels: Channel[];
   templates: BirthdayReminderTemplate[];
   stickers: Sticker[];
 }) {
@@ -32,7 +38,11 @@ export function BirthdayRemindersManager({
 
   return (
     <div className="space-y-6">
-      <RemindToggle enabled={remindEnabled} />
+      <RemindSettings
+        enabled={remindEnabled}
+        selectedChannelId={selectedChannelId}
+        channels={channels}
+      />
 
       <div className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -128,52 +138,101 @@ function TemplateStatusBadge({ status }: { status: boolean }) {
   );
 }
 
-function RemindToggle({ enabled }: { enabled: boolean }) {
-  const [state, formAction, pending] = useActionState(
+function RemindSettings({
+  enabled,
+  selectedChannelId,
+  channels,
+}: {
+  enabled: boolean;
+  selectedChannelId: string;
+  channels: Channel[];
+}) {
+  const [toggleState, toggleAction, togglePending] = useActionState(
     toggleBirthdayRemind,
+    initialState,
+  );
+  const [channelState, channelAction, channelPending] = useActionState(
+    updateBirthdayChannel,
     initialState,
   );
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-slate-800">生日提醒功能</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            对应 <code className="text-xs">event_remind</code> 表，{" "}
-            <code className="text-xs">event_code = BIRTHDAY</code>
-          </p>
+      <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-slate-800">生日提醒功能</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              对应 <code className="text-xs">event_remind</code> 表，{" "}
+              <code className="text-xs">event_code = BIRTHDAY</code>
+            </p>
+          </div>
+
+          <form action={toggleAction} className="flex items-center gap-3">
+            <input type="hidden" name="remind" value={enabled ? "false" : "true"} />
+            <span
+              className={`text-sm font-medium ${
+                enabled ? "text-green-600" : "text-slate-400"
+              }`}
+            >
+              {enabled ? "已开启" : "已关闭"}
+            </span>
+            <button
+              type="submit"
+              disabled={togglePending}
+              className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition ${
+                enabled ? "bg-brand-600" : "bg-slate-300"
+              } disabled:opacity-60`}
+              aria-label={enabled ? "关闭生日提醒" : "开启生日提醒"}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
+                  enabled ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </form>
         </div>
 
-        <form action={formAction} className="flex items-center gap-3">
-          <input type="hidden" name="remind" value={enabled ? "false" : "true"} />
-          <span
-            className={`text-sm font-medium ${
-              enabled ? "text-green-600" : "text-slate-400"
-            }`}
-          >
-            {enabled ? "已开启" : "已关闭"}
-          </span>
-          <button
-            type="submit"
-            disabled={pending}
-            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition ${
-              enabled ? "bg-brand-600" : "bg-slate-300"
-            } disabled:opacity-60`}
-            aria-label={enabled ? "关闭生日提醒" : "开启生日提醒"}
-          >
-            <span
-              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
-                enabled ? "translate-x-6" : "translate-x-1"
-              }`}
-            />
-          </button>
-        </form>
+        <div className="border-t border-slate-100 pt-4">
+          <form action={channelAction} className="flex flex-col gap-2 sm:max-w-md">
+            <label
+              htmlFor="birthday-channel"
+              className="text-sm font-medium text-slate-700"
+            >
+              提醒频道
+            </label>
+            <select
+              id="birthday-channel"
+              name="channel_id"
+              defaultValue={selectedChannelId}
+              disabled={channelPending || channels.length === 0}
+              onChange={(e) => e.currentTarget.form?.requestSubmit()}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <option value="">请选择频道…</option>
+              {channels.map((c) => (
+                <option key={c.channel_id} value={c.channel_id}>
+                  {c.channel_name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-400">
+              仅显示 <code>type = GuildText</code> 的频道；更改后写入{" "}
+              <code>event_remind.channel_id</code>
+            </p>
+            {channels.length === 0 ? (
+              <p className="text-xs text-amber-600">
+                暂无可用频道，请确认 channel 表有 type 为 GuildText 的数据。
+              </p>
+            ) : null}
+          </form>
+        </div>
       </div>
 
-      {state.error ? (
+      {toggleState.error || channelState.error ? (
         <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
-          {state.error}
+          {toggleState.error ?? channelState.error}
         </p>
       ) : null}
     </div>

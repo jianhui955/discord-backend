@@ -30,7 +30,14 @@ export interface EventRemind {
   id: string;
   event_code: string;
   remind: boolean;
+  channel_id: string | null;
   updated_at: string;
+}
+
+export interface Channel {
+  channel_name: string;
+  channel_id: string;
+  type: string;
 }
 
 export interface BirthdayReminderTemplate {

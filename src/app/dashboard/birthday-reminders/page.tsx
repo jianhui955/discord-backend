@@ -3,6 +3,7 @@ import { BirthdayRemindersManager } from "@/components/birthday-reminders-manage
 import {
   BIRTHDAY_EVENT_CODE,
   type BirthdayReminderTemplate,
+  type Channel,
   type EventRemind,
   type Sticker,
 } from "@/lib/types";
@@ -12,24 +13,35 @@ export const dynamic = "force-dynamic";
 export default async function BirthdayRemindersPage() {
   const supabase = await createClient();
 
-  const [remindResult, templatesResult, stickersResult] = await Promise.all([
-    supabase
-      .from("event_remind")
-      .select("*")
-      .eq("event_code", BIRTHDAY_EVENT_CODE)
-      .maybeSingle(),
-    supabase
-      .from("birthday_reminder_templates")
-      .select("*")
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("sticker")
-      // pic_discord_id 若是 bigint，JSON 传到 JS 会丢精度，务必在 DB 用 text 存
-      .select("pic_name, pic_code, pic_discord_id")
-      .order("pic_name", { ascending: true }),
-  ]);
+  const [remindResult, templatesResult, stickersResult, channelsResult] =
+    await Promise.all([
+      supabase
+        .from("event_remind")
+        .select("*")
+        .eq("event_code", BIRTHDAY_EVENT_CODE)
+        .maybeSingle(),
+      supabase
+        .from("birthday_reminder_templates")
+        .select("*")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("sticker")
+        // pic_discord_id 若是 bigint，JSON 传到 JS 会丢精度，务必在 DB 用 text 存
+        .select("pic_name, pic_code, pic_discord_id")
+        .order("pic_name", { ascending: true }),
+      supabase
+        .from("channel")
+        .select("channel_name, channel_id, type")
+        .eq("type", "GuildText")
+        .order("channel_name", { ascending: true }),
+    ]);
 
-  const remindEnabled = (remindResult.data as EventRemind | null)?.remind ?? false;
+  const remindRow = remindResult.data as EventRemind | null;
+  const remindEnabled = remindRow?.remind ?? false;
+  const selectedChannelId = remindRow?.channel_id
+    ? String(remindRow.channel_id)
+    : "";
+
   const templates = (templatesResult.data ?? []) as BirthdayReminderTemplate[];
   const stickers = ((stickersResult.data ?? []) as Sticker[]).map((s) => ({
     pic_name: String(s.pic_name ?? ""),
@@ -37,8 +49,17 @@ export default async function BirthdayRemindersPage() {
     // 必须保持字符串：Discord snowflake 会超过 Number.MAX_SAFE_INTEGER
     pic_discord_id: String(s.pic_discord_id ?? "").trim(),
   }));
+  const channels = ((channelsResult.data ?? []) as Channel[]).map((c) => ({
+    channel_name: String(c.channel_name ?? ""),
+    channel_id: String(c.channel_id ?? "").trim(),
+    type: String(c.type ?? ""),
+  }));
+
   const error =
-    remindResult.error ?? templatesResult.error ?? stickersResult.error;
+    remindResult.error ??
+    templatesResult.error ??
+    stickersResult.error ??
+    channelsResult.error;
 
   return (
     <div className="space-y-6">
@@ -60,6 +81,8 @@ export default async function BirthdayRemindersPage() {
 
       <BirthdayRemindersManager
         remindEnabled={remindEnabled}
+        selectedChannelId={selectedChannelId}
+        channels={channels}
         templates={templates}
         stickers={stickers}
       />
