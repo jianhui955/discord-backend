@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState, startTransition } from "react";
 import {
   deleteTemplate,
   toggleBirthdayRemind,
@@ -155,6 +155,12 @@ function RemindSettings({
     updateBirthdayChannel,
     initialState,
   );
+  const [channelId, setChannelId] = useState(selectedChannelId);
+
+  // 服务端 revalidate 后，用最新 prop 同步本地状态
+  useEffect(() => {
+    setChannelId(selectedChannelId);
+  }, [selectedChannelId]);
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5">
@@ -195,7 +201,7 @@ function RemindSettings({
         </div>
 
         <div className="border-t border-slate-100 pt-4">
-          <form action={channelAction} className="flex flex-col gap-2 sm:max-w-md">
+          <div className="flex flex-col gap-2 sm:max-w-md">
             <label
               htmlFor="birthday-channel"
               className="text-sm font-medium text-slate-700"
@@ -204,10 +210,17 @@ function RemindSettings({
             </label>
             <select
               id="birthday-channel"
-              name="channel_id"
-              defaultValue={selectedChannelId}
-              disabled={channelPending || channels.length === 0}
-              onChange={(e) => e.currentTarget.form?.requestSubmit()}
+              value={channelId}
+              disabled={channels.length === 0 || channelPending}
+              onChange={(e) => {
+                const next = e.target.value;
+                setChannelId(next);
+                const fd = new FormData();
+                fd.set("channel_id", next);
+                startTransition(() => {
+                  channelAction(fd);
+                });
+              }}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <option value="">请选择频道…</option>
@@ -220,13 +233,17 @@ function RemindSettings({
             <p className="text-xs text-slate-400">
               仅显示 <code>type = GuildText</code> 的频道；更改后写入{" "}
               <code>event_remind.channel_id</code>
+              {channelPending ? "（保存中…）" : null}
             </p>
             {channels.length === 0 ? (
               <p className="text-xs text-amber-600">
                 暂无可用频道，请确认 channel 表有 type 为 GuildText 的数据。
               </p>
             ) : null}
-          </form>
+            {!channelPending && channelState.success ? (
+              <p className="text-xs text-green-600">已保存</p>
+            ) : null}
+          </div>
         </div>
       </div>
 
