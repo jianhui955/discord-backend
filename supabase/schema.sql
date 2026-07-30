@@ -78,6 +78,11 @@ insert into public.event_remind (event_code, remind)
 values ('BIRTHDAY', false)
 on conflict (event_code) do nothing;
 
+-- 兑换码提醒默认配置
+insert into public.event_remind (event_code, remind)
+values ('CODES', false)
+on conflict (event_code) do nothing;
+
 -- ============================================================
 -- 生日提醒模板（birthday_reminder_templates）
 -- ============================================================

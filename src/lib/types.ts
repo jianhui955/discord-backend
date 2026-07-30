@@ -25,6 +25,7 @@ export const STATUS_LABELS: Record<MemberStatus, string> = {
 };
 
 export const BIRTHDAY_EVENT_CODE = "BIRTHDAY" as const;
+export const CODES_EVENT_CODE = "CODES" as const;
 
 export interface EventRemind {
   id: string;
