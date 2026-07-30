@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
 import { BirthdayRemindersManager } from "@/components/birthday-reminders-manager";
-import { normalizeRemindTimeFromDb } from "@/lib/remind-time";
 import {
   BIRTHDAY_EVENT_CODE,
   type BirthdayReminderTemplate,
@@ -42,7 +41,6 @@ export default async function BirthdayRemindersPage() {
   const selectedChannelId = remindRow?.channel_id
     ? String(remindRow.channel_id)
     : "";
-  const remindTime = normalizeRemindTimeFromDb(remindRow?.remind_time);
 
   const templates = (templatesResult.data ?? []) as BirthdayReminderTemplate[];
   const stickers = ((stickersResult.data ?? []) as Sticker[]).map((s) => ({
@@ -84,7 +82,6 @@ export default async function BirthdayRemindersPage() {
       <BirthdayRemindersManager
         remindEnabled={remindEnabled}
         selectedChannelId={selectedChannelId}
-        remindTime={remindTime}
         channels={channels}
         templates={templates}
         stickers={stickers}

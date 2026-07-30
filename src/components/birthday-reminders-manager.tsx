@@ -5,7 +5,6 @@ import {
   deleteTemplate,
   toggleBirthdayRemind,
   updateBirthdayChannel,
-  updateBirthdayRemindTime,
   upsertTemplate,
   type ActionState,
 } from "@/app/dashboard/birthday-reminders/actions";
@@ -24,14 +23,12 @@ const initialState: ActionState = {};
 export function BirthdayRemindersManager({
   remindEnabled,
   selectedChannelId,
-  remindTime,
   channels,
   templates,
   stickers,
 }: {
   remindEnabled: boolean;
   selectedChannelId: string;
-  remindTime: string[] | null;
   channels: Channel[];
   templates: BirthdayReminderTemplate[];
   stickers: Sticker[];
@@ -48,13 +45,10 @@ export function BirthdayRemindersManager({
         eventCode={BIRTHDAY_EVENT_CODE}
         enabled={remindEnabled}
         selectedChannelId={selectedChannelId}
-        remindTime={remindTime}
         channels={channels}
         toggleAction={toggleBirthdayRemind}
         channelAction={updateBirthdayChannel}
-        remindTimeAction={updateBirthdayRemindTime}
         channelSelectId="birthday-channel"
-        remindTimeInputId="birthday-remind-time"
       />
 
       <div className="space-y-4">

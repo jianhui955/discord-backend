@@ -8,24 +8,11 @@ export type RemindActionState = { error?: string; success?: boolean };
 
 const initialState: RemindActionState = {};
 
-export function RemindSettings({
-  title,
-  eventCode,
-  enabled,
-  selectedChannelId,
-  remindTime,
-  channels,
-  toggleAction,
-  channelAction,
-  remindTimeAction,
-  channelSelectId = "remind-channel",
-  remindTimeInputId = "remind-time",
-}: {
+type RemindSettingsProps = {
   title: string;
   eventCode: string;
   enabled: boolean;
   selectedChannelId: string;
-  remindTime: string[] | null;
   channels: Channel[];
   toggleAction: (
     prev: RemindActionState,
@@ -35,13 +22,31 @@ export function RemindSettings({
     prev: RemindActionState,
     formData: FormData,
   ) => Promise<RemindActionState>;
-  remindTimeAction: (
+  channelSelectId?: string;
+  /** 传入则显示提醒时间输入框（仅兑换码等板块需要） */
+  remindTime?: string[] | null;
+  remindTimeAction?: (
     prev: RemindActionState,
     formData: FormData,
   ) => Promise<RemindActionState>;
-  channelSelectId?: string;
   remindTimeInputId?: string;
-}) {
+};
+
+export function RemindSettings({
+  title,
+  eventCode,
+  enabled,
+  selectedChannelId,
+  channels,
+  toggleAction,
+  channelAction,
+  channelSelectId = "remind-channel",
+  remindTime,
+  remindTimeAction,
+  remindTimeInputId = "remind-time",
+}: RemindSettingsProps) {
+  const showRemindTime = !!remindTimeAction;
+
   const [toggleState, toggleFormAction, togglePending] = useActionState(
     toggleAction,
     initialState,
@@ -51,21 +56,26 @@ export function RemindSettings({
     initialState,
   );
   const [timeState, timeFormAction, timePending] = useActionState(
-    remindTimeAction,
+    remindTimeAction ?? noopAction,
     initialState,
   );
   const [channelId, setChannelId] = useState(selectedChannelId);
-  const [timeInput, setTimeInput] = useState(formatRemindTimeInput(remindTime));
+  const [timeInput, setTimeInput] = useState(
+    formatRemindTimeInput(remindTime ?? null),
+  );
 
   useEffect(() => {
     setChannelId(selectedChannelId);
   }, [selectedChannelId]);
 
   useEffect(() => {
-    setTimeInput(formatRemindTimeInput(remindTime));
-  }, [remindTime]);
+    if (showRemindTime) {
+      setTimeInput(formatRemindTimeInput(remindTime ?? null));
+    }
+  }, [remindTime, showRemindTime]);
 
   function saveRemindTime(value: string) {
+    if (!remindTimeAction) return;
     const fd = new FormData();
     fd.set("remind_time", value);
     startTransition(() => {
@@ -111,8 +121,12 @@ export function RemindSettings({
           </form>
         </div>
 
-        <div className="grid gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-2">
+        <div
+          className={`grid gap-4 border-t border-slate-100 pt-4 ${
+            showRemindTime ? "sm:grid-cols-2" : ""
+          }`}
+        >
+          <div className="flex flex-col gap-2 sm:max-w-md">
             <label
               htmlFor={channelSelectId}
               className="text-sm font-medium text-slate-700"
@@ -155,38 +169,40 @@ export function RemindSettings({
             ) : null}
           </div>
 
-          <div className="flex flex-col gap-2">
-            <label
-              htmlFor={remindTimeInputId}
-              className="text-sm font-medium text-slate-700"
-            >
-              提醒时间
-            </label>
-            <input
-              id={remindTimeInputId}
-              type="text"
-              value={timeInput}
-              disabled={timePending}
-              placeholder="10:00,12:00,14:20"
-              onChange={(e) => setTimeInput(e.target.value)}
-              onBlur={() => saveRemindTime(timeInput)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  saveRemindTime(timeInput);
-                }
-              }}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200 disabled:cursor-not-allowed disabled:opacity-60"
-            />
-            <p className="text-xs text-slate-400">
-              多个时间用英文逗号分隔，存入{" "}
-              <code>event_remind.remind_time</code>（数组）
-              {timePending ? "（保存中…）" : null}
-              {!timePending && timeState.success ? (
-                <span className="ml-1 text-green-600">已保存</span>
-              ) : null}
-            </p>
-          </div>
+          {showRemindTime ? (
+            <div className="flex flex-col gap-2">
+              <label
+                htmlFor={remindTimeInputId}
+                className="text-sm font-medium text-slate-700"
+              >
+                提醒时间
+              </label>
+              <input
+                id={remindTimeInputId}
+                type="text"
+                value={timeInput}
+                disabled={timePending}
+                placeholder="10:00,12:00,14:20"
+                onChange={(e) => setTimeInput(e.target.value)}
+                onBlur={() => saveRemindTime(timeInput)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    saveRemindTime(timeInput);
+                  }
+                }}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200 disabled:cursor-not-allowed disabled:opacity-60"
+              />
+              <p className="text-xs text-slate-400">
+                多个时间用英文逗号分隔，存入{" "}
+                <code>event_remind.remind_time</code>（数组）
+                {timePending ? "（保存中…）" : null}
+                {!timePending && timeState.success ? (
+                  <span className="ml-1 text-green-600">已保存</span>
+                ) : null}
+              </p>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -197,4 +213,8 @@ export function RemindSettings({
       ) : null}
     </div>
   );
+}
+
+async function noopAction(): Promise<RemindActionState> {
+  return {};
 }
