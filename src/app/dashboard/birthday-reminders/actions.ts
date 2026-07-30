@@ -3,7 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { BIRTHDAY_EVENT_CODE } from "@/lib/types";
-import { upsertEventRemind } from "@/lib/event-remind-server";
+import {
+  parseRemindTimeFromForm,
+  upsertEventRemind,
+} from "@/lib/event-remind-server";
 
 export type ActionState = { error?: string; success?: boolean };
 
@@ -28,6 +31,22 @@ export async function updateBirthdayChannel(
   const channelId = String(formData.get("channel_id") ?? "").trim() || null;
   const { error } = await upsertEventRemind(BIRTHDAY_EVENT_CODE, {
     channel_id: channelId,
+  });
+
+  if (error) return { error: error.message };
+  revalidatePath(REVALIDATE_PATH);
+  return { success: true };
+}
+
+export async function updateBirthdayRemindTime(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const parsed = parseRemindTimeFromForm(formData);
+  if (parsed.error) return { error: parsed.error };
+
+  const { error } = await upsertEventRemind(BIRTHDAY_EVENT_CODE, {
+    remind_time: parsed.times,
   });
 
   if (error) return { error: error.message };

@@ -23,7 +23,7 @@ type RemindSettingsProps = {
     formData: FormData,
   ) => Promise<RemindActionState>;
   channelSelectId?: string;
-  /** 传入则显示提醒时间输入框（仅兑换码等板块需要） */
+  /** 传入则显示提醒时间输入框 */
   remindTime?: string[] | null;
   remindTimeAction?: (
     prev: RemindActionState,
