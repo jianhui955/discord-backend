@@ -3,10 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import {
   toggleCodesRemind,
   updateCodesChannel,
+  updateCodesRemindTime,
 } from "@/app/dashboard/codes/actions";
 import { CodesTable } from "@/components/codes-table";
 import { RemindSettings } from "@/components/remind-settings";
 import { CODES_PAGE_SIZE, type CodeRecord } from "@/lib/codes";
+import { normalizeRemindTimeFromDb } from "@/lib/remind-time";
 import {
   CODES_EVENT_CODE,
   type Channel,
@@ -55,6 +57,7 @@ export default async function CodesPage({
   const selectedChannelId = remindRow?.channel_id
     ? String(remindRow.channel_id)
     : "";
+  const remindTime = normalizeRemindTimeFromDb(remindRow?.remind_time);
 
   const channels = ((channelsResult.data ?? []) as Channel[]).map((c) => ({
     channel_name: String(c.channel_name ?? ""),
@@ -88,10 +91,13 @@ export default async function CodesPage({
         eventCode={CODES_EVENT_CODE}
         enabled={remindEnabled}
         selectedChannelId={selectedChannelId}
+        remindTime={remindTime}
         channels={channels}
         toggleAction={toggleCodesRemind}
         channelAction={updateCodesChannel}
+        remindTimeAction={updateCodesRemindTime}
         channelSelectId="codes-channel"
+        remindTimeInputId="codes-remind-time"
       />
 
       <CodesTable codes={codes} />

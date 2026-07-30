@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState, startTransition } from "react";
+import { formatRemindTimeInput } from "@/lib/remind-time";
 import type { Channel } from "@/lib/types";
 
 export type RemindActionState = { error?: string; success?: boolean };
@@ -12,15 +13,19 @@ export function RemindSettings({
   eventCode,
   enabled,
   selectedChannelId,
+  remindTime,
   channels,
   toggleAction,
   channelAction,
+  remindTimeAction,
   channelSelectId = "remind-channel",
+  remindTimeInputId = "remind-time",
 }: {
   title: string;
   eventCode: string;
   enabled: boolean;
   selectedChannelId: string;
+  remindTime: string[] | null;
   channels: Channel[];
   toggleAction: (
     prev: RemindActionState,
@@ -30,7 +35,12 @@ export function RemindSettings({
     prev: RemindActionState,
     formData: FormData,
   ) => Promise<RemindActionState>;
+  remindTimeAction: (
+    prev: RemindActionState,
+    formData: FormData,
+  ) => Promise<RemindActionState>;
   channelSelectId?: string;
+  remindTimeInputId?: string;
 }) {
   const [toggleState, toggleFormAction, togglePending] = useActionState(
     toggleAction,
@@ -40,11 +50,28 @@ export function RemindSettings({
     channelAction,
     initialState,
   );
+  const [timeState, timeFormAction, timePending] = useActionState(
+    remindTimeAction,
+    initialState,
+  );
   const [channelId, setChannelId] = useState(selectedChannelId);
+  const [timeInput, setTimeInput] = useState(formatRemindTimeInput(remindTime));
 
   useEffect(() => {
     setChannelId(selectedChannelId);
   }, [selectedChannelId]);
+
+  useEffect(() => {
+    setTimeInput(formatRemindTimeInput(remindTime));
+  }, [remindTime]);
+
+  function saveRemindTime(value: string) {
+    const fd = new FormData();
+    fd.set("remind_time", value);
+    startTransition(() => {
+      timeFormAction(fd);
+    });
+  }
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5">
@@ -84,8 +111,8 @@ export function RemindSettings({
           </form>
         </div>
 
-        <div className="border-t border-slate-100 pt-4">
-          <div className="flex flex-col gap-2 sm:max-w-md">
+        <div className="grid gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-2">
             <label
               htmlFor={channelSelectId}
               className="text-sm font-medium text-slate-700"
@@ -115,25 +142,57 @@ export function RemindSettings({
               ))}
             </select>
             <p className="text-xs text-slate-400">
-              仅显示 <code>type = GuildText</code> 的频道；更改后写入{" "}
-              <code>event_remind.channel_id</code>
+              仅显示 <code>type = GuildText</code> 的频道
               {channelPending ? "（保存中…）" : null}
+              {!channelPending && channelState.success ? (
+                <span className="ml-1 text-green-600">已保存</span>
+              ) : null}
             </p>
             {channels.length === 0 ? (
               <p className="text-xs text-amber-600">
                 暂无可用频道，请确认 channel 表有 type 为 GuildText 的数据。
               </p>
             ) : null}
-            {!channelPending && channelState.success ? (
-              <p className="text-xs text-green-600">已保存</p>
-            ) : null}
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label
+              htmlFor={remindTimeInputId}
+              className="text-sm font-medium text-slate-700"
+            >
+              提醒时间
+            </label>
+            <input
+              id={remindTimeInputId}
+              type="text"
+              value={timeInput}
+              disabled={timePending}
+              placeholder="10:00,12:00,14:20"
+              onChange={(e) => setTimeInput(e.target.value)}
+              onBlur={() => saveRemindTime(timeInput)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  saveRemindTime(timeInput);
+                }
+              }}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200 disabled:cursor-not-allowed disabled:opacity-60"
+            />
+            <p className="text-xs text-slate-400">
+              多个时间用英文逗号分隔，存入{" "}
+              <code>event_remind.remind_time</code>（数组）
+              {timePending ? "（保存中…）" : null}
+              {!timePending && timeState.success ? (
+                <span className="ml-1 text-green-600">已保存</span>
+              ) : null}
+            </p>
           </div>
         </div>
       </div>
 
-      {toggleState.error || channelState.error ? (
+      {toggleState.error || channelState.error || timeState.error ? (
         <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
-          {toggleState.error ?? channelState.error}
+          {toggleState.error ?? channelState.error ?? timeState.error}
         </p>
       ) : null}
     </div>

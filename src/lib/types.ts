@@ -32,6 +32,7 @@ export interface EventRemind {
   event_code: string;
   remind: boolean;
   channel_id: string | null;
+  remind_time: string[] | null;
   updated_at: string;
 }
 
