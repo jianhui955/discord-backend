@@ -116,3 +116,17 @@ create policy "authenticated_full_access"
 -- create policy "authenticated_full_access"
 --   on public.sticker for all to authenticated
 --   using (true) with check (true);
+
+-- ============================================================
+-- 兑换码（codes）— 若已有表可跳过
+-- ============================================================
+-- create table if not exists public.codes (
+--   id          uuid primary key default gen_random_uuid(),
+--   code        text not null,
+--   created_at  timestamptz not null default now()
+-- );
+--
+-- alter table public.codes enable row level security;
+-- create policy "authenticated_full_access"
+--   on public.codes for all to authenticated
+--   using (true) with check (true);

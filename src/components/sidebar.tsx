@@ -46,6 +46,15 @@ const NAV: NavItem[] = [
       </svg>
     ),
   },
+  {
+    href: "/dashboard/codes",
+    label: "兑换码管理",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 2.25v.75m0 2.25v.75m0 2.25v.75m-9-7.5h10.5a2.25 2.25 0 0 1 2.25 2.25v10.5a2.25 2.25 0 0 1-2.25 2.25H6.75a2.25 2.25 0 0 1-2.25-2.25V9a2.25 2.25 0 0 1 2.25-2.25Z" />
+      </svg>
+    ),
+  },
 ];
 
 export function Sidebar() {
