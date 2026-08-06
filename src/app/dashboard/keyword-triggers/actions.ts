@@ -21,6 +21,18 @@ function parseChannelIdsFromForm(formData: FormData): string[] {
   return [...new Set(ids)];
 }
 
+function parsePercentage(raw: FormDataEntryValue | null): {
+  value?: number;
+  error?: string;
+} {
+  const text = String(raw ?? "").trim();
+  if (!text) return { error: "百分比不能为空。" };
+  const n = Number(text);
+  if (!Number.isFinite(n)) return { error: "百分比必须是数字。" };
+  if (n < 0 || n > 100) return { error: "百分比需在 0–100 之间。" };
+  return { value: n };
+}
+
 export async function upsertKeywordTrigger(
   _prev: ActionState,
   formData: FormData,
@@ -30,18 +42,21 @@ export async function upsertKeywordTrigger(
   const personality = String(formData.get("personality") ?? "").trim();
   const status = parseStatus(formData.get("status"));
   const channelIds = parseChannelIdsFromForm(formData);
+  const pct = parsePercentage(formData.get("percentage"));
 
   if (!keyword) return { error: "触发关键字不能为空。" };
   if (!personality) return { error: "回复性格不能为空。" };
   if (channelIds.length === 0) {
     return { error: "请至少选择一个检测平台（频道）。" };
   }
+  if (pct.error || pct.value === undefined) return { error: pct.error };
 
   const supabase = await createClient();
   const payload = {
     keyword,
     channel_ids: channelIds,
     personality,
+    percentage: pct.value,
     status,
   };
 

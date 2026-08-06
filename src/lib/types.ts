@@ -61,6 +61,7 @@ export interface KeywordTrigger {
   keyword: string;
   channel_ids: string[];
   personality: string;
+  percentage: number;
   status: number;
   created_at: string;
   updated_at: string;
@@ -88,11 +89,13 @@ export function normalizeChannelIds(raw: unknown): string[] {
 
 /** 规范化 keyword_triggers 行 */
 export function mapKeywordTriggerRow(row: Record<string, unknown>): KeywordTrigger {
+  const pct = Number(row.percentage);
   return {
     id: row.id as number | string,
     keyword: String(row.keyword ?? ""),
     channel_ids: normalizeChannelIds(row.channel_ids),
     personality: String(row.personality ?? ""),
+    percentage: Number.isFinite(pct) ? pct : 0,
     status: Number(row.status) === 0 ? 0 : 1,
     created_at: String(row.created_at ?? ""),
     updated_at: String(row.updated_at ?? ""),

@@ -137,3 +137,50 @@ create policy "authenticated_full_access"
 -- create policy "authenticated_full_access"
 --   on public.codes for all to authenticated
 --   using (true) with check (true);
+
+-- ============================================================
+-- 关键词触发 / 随机回复（keyword_triggers）
+-- ============================================================
+create table if not exists public.keyword_triggers (
+  id          bigserial primary key,
+  keyword     text not null,
+  channel_ids jsonb not null default '[]'::jsonb,
+  personality text not null,
+  percentage  numeric not null default 0,
+  status      smallint not null default 1,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  created_by  text default 'admin'
+);
+
+create index if not exists idx_keyword_triggers_keyword
+  on public.keyword_triggers (keyword);
+create index if not exists idx_keyword_triggers_status
+  on public.keyword_triggers (status);
+
+create or replace function public.update_keyword_triggers_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists update_keyword_triggers_updated_at on public.keyword_triggers;
+create trigger update_keyword_triggers_updated_at
+  before update on public.keyword_triggers
+  for each row
+  execute function public.update_keyword_triggers_updated_at();
+
+alter table public.keyword_triggers enable row level security;
+
+drop policy if exists "authenticated_full_access" on public.keyword_triggers;
+create policy "authenticated_full_access"
+  on public.keyword_triggers
+  for all
+  to authenticated
+  using (true)
+  with check (true);
+
+-- 已有表若缺少 percentage 列，执行：
+-- alter table public.keyword_triggers add column if not exists percentage numeric not null default 0;

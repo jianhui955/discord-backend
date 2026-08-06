@@ -64,6 +64,7 @@ export function KeywordTriggersManager({
                 <th className="px-5 py-3 font-medium">触发关键字</th>
                 <th className="px-5 py-3 font-medium">检测平台</th>
                 <th className="px-5 py-3 font-medium">回复性格</th>
+                <th className="px-5 py-3 font-medium">百分比</th>
                 <th className="px-5 py-3 font-medium">状态</th>
                 <th className="px-5 py-3 font-medium">更新时间</th>
                 <th className="px-5 py-3 text-right font-medium">操作</th>
@@ -72,7 +73,7 @@ export function KeywordTriggersManager({
             <tbody className="divide-y divide-slate-100">
               {triggers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-12 text-center text-slate-400">
+                  <td colSpan={7} className="px-5 py-12 text-center text-slate-400">
                     暂无规则，点击「新增规则」添加
                   </td>
                 </tr>
@@ -90,6 +91,9 @@ export function KeywordTriggersManager({
                     </td>
                     <td className="max-w-xs truncate px-5 py-3.5 text-slate-600">
                       {t.personality}
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-700">
+                      {t.percentage}%
                     </td>
                     <td className="px-5 py-3.5">
                       <StatusBadge status={t.status} />
@@ -337,6 +341,28 @@ function TriggerModal({
               placeholder="描述 AI 的回复语气与性格，例如：你是一个温柔、体贴的朋友…"
               className={`${inputClass} resize-y`}
             />
+          </Field>
+
+          <Field label="百分比" required>
+            <div className="relative">
+              <input
+                name="percentage"
+                type="number"
+                required
+                min={0}
+                max={100}
+                step="any"
+                defaultValue={trigger?.percentage ?? 0}
+                placeholder="0–100"
+                className={`${inputClass} pr-8`}
+              />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">
+                %
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-slate-400">
+              触发概率，范围 0–100，对应 <code>percentage</code> 列
+            </p>
           </Field>
 
           <Field label="状态">
