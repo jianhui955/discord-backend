@@ -55,6 +55,51 @@ export interface Sticker {
   pic_discord_id: string;
 }
 
+/** 关键词触发 / 随机回复规则（status: 1=启用, 0=禁用） */
+export interface KeywordTrigger {
+  id: number | string;
+  keyword: string;
+  channel_ids: string[];
+  personality: string;
+  status: number;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
+
+/** 将 DB 中的 channel_ids（jsonb / 数组）规范为 string[] */
+export function normalizeChannelIds(raw: unknown): string[] {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) {
+    return raw.map((v) => String(v ?? "").trim()).filter(Boolean);
+  }
+  if (typeof raw === "string") {
+    try {
+      return normalizeChannelIds(JSON.parse(raw));
+    } catch {
+      return raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+  }
+  return [];
+}
+
+/** 规范化 keyword_triggers 行 */
+export function mapKeywordTriggerRow(row: Record<string, unknown>): KeywordTrigger {
+  return {
+    id: row.id as number | string,
+    keyword: String(row.keyword ?? ""),
+    channel_ids: normalizeChannelIds(row.channel_ids),
+    personality: String(row.personality ?? ""),
+    status: Number(row.status) === 0 ? 0 : 1,
+    created_at: String(row.created_at ?? ""),
+    updated_at: String(row.updated_at ?? ""),
+    created_by: row.created_by != null ? String(row.created_by) : null,
+  };
+}
+
 /**
  * Discord emoji / sticker 图片候选 URL
  * 你的 pic_discord_id 实际是 emoji id：
