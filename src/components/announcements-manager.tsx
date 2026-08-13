@@ -262,9 +262,16 @@ function AnnouncementModal({
               rows={5}
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="输入要发送的公告内容…"
+              placeholder="输入要发送的公告内容… 可用 {{role_id}} tag 身份组"
               className={`${inputClass} resize-none`}
             />
+            <p className="mt-1.5 text-xs text-slate-400">
+              提示：输入{" "}
+              <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px] text-slate-600">
+                {"{{role_id}}"}
+              </code>{" "}
+              可 tag 身份组（将 role_id 替换为实际的 Discord 身份组 ID）
+            </p>
           </Field>
 
           <div>
