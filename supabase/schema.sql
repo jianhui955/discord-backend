@@ -184,3 +184,30 @@ create policy "authenticated_full_access"
 
 -- 已有表若缺少 percentage 列，执行：
 -- alter table public.keyword_triggers add column if not exists percentage numeric not null default 0;
+
+-- ============================================================
+-- 公告（announcements）
+-- date: jsonb 存周几数组，如 [1,3,5]（1=周一 … 7=周日）
+-- time: text 存 HH:MM
+-- ============================================================
+create table if not exists public.announcements (
+  id          uuid primary key default gen_random_uuid(),
+  content     text not null,
+  date        jsonb not null default '[]'::jsonb,
+  time        text not null default '',
+  status      boolean not null default true,
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists announcements_created_at_idx
+  on public.announcements (created_at desc);
+
+alter table public.announcements enable row level security;
+
+drop policy if exists "authenticated_full_access" on public.announcements;
+create policy "authenticated_full_access"
+  on public.announcements
+  for all
+  to authenticated
+  using (true)
+  with check (true);

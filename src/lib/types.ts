@@ -49,6 +49,86 @@ export interface BirthdayReminderTemplate {
   created_at: string;
 }
 
+/** 公告：date 存周几 JSON 数组（1=周一 … 7=周日） */
+export type Weekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+export const WEEKDAY_OPTIONS: { value: Weekday; label: string }[] = [
+  { value: 1, label: "周一" },
+  { value: 2, label: "周二" },
+  { value: 3, label: "周三" },
+  { value: 4, label: "周四" },
+  { value: 5, label: "周五" },
+  { value: 6, label: "周六" },
+  { value: 7, label: "周日" },
+];
+
+export const WEEKDAY_LABELS: Record<Weekday, string> = {
+  1: "周一",
+  2: "周二",
+  3: "周三",
+  4: "周四",
+  5: "周五",
+  6: "周六",
+  7: "周日",
+};
+
+export interface Announcement {
+  id: string;
+  content: string;
+  /** 周几列表，1–7 */
+  date: Weekday[];
+  /** HH:MM */
+  time: string;
+  status: boolean;
+  created_at: string;
+}
+
+/** 规范化公告 date（jsonb / 数组）为 1–7 */
+export function normalizeWeekdays(raw: unknown): Weekday[] {
+  let arr: unknown[] = [];
+  if (raw == null) return [];
+  if (Array.isArray(raw)) arr = raw;
+  else if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) arr = parsed;
+    } catch {
+      arr = raw.split(",").map((s) => s.trim());
+    }
+  }
+
+  const out: Weekday[] = [];
+  for (const v of arr) {
+    const n = Number(v);
+    if (n >= 1 && n <= 7 && !out.includes(n as Weekday)) {
+      out.push(n as Weekday);
+    }
+  }
+  return out.sort((a, b) => a - b);
+}
+
+export function mapAnnouncementRow(row: Record<string, unknown>): Announcement {
+  const statusRaw = row.status;
+  const status =
+    typeof statusRaw === "boolean"
+      ? statusRaw
+      : Number(statusRaw) !== 0 && statusRaw !== false && statusRaw !== "false";
+
+  return {
+    id: String(row.id ?? ""),
+    content: String(row.content ?? ""),
+    date: normalizeWeekdays(row.date),
+    time: String(row.time ?? "").trim(),
+    status,
+    created_at: String(row.created_at ?? ""),
+  };
+}
+
+export function formatWeekdays(days: Weekday[]): string {
+  if (!days.length) return "—";
+  return days.map((d) => WEEKDAY_LABELS[d]).join("、");
+}
+
 export interface Sticker {
   pic_name: string;
   pic_code: string;
