@@ -3,6 +3,7 @@ import { AnnouncementsManager } from "@/components/announcements-manager";
 import {
   mapAnnouncementRow,
   type Announcement,
+  type Channel,
   type Sticker,
 } from "@/lib/types";
 
@@ -11,16 +12,22 @@ export const dynamic = "force-dynamic";
 export default async function AnnouncementsPage() {
   const supabase = await createClient();
 
-  const [announcementsResult, stickersResult] = await Promise.all([
-    supabase
-      .from("announcements")
-      .select("*")
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("sticker")
-      .select("pic_name, pic_code, pic_discord_id")
-      .order("pic_name", { ascending: true }),
-  ]);
+  const [announcementsResult, stickersResult, channelsResult] =
+    await Promise.all([
+      supabase
+        .from("announcements")
+        .select("*")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("sticker")
+        .select("pic_name, pic_code, pic_discord_id")
+        .order("pic_name", { ascending: true }),
+      supabase
+        .from("channel")
+        .select("channel_name, channel_id, type")
+        .eq("type", "GuildText")
+        .order("channel_name", { ascending: true }),
+    ]);
 
   const announcements = (
     (announcementsResult.data ?? []) as Record<string, unknown>[]
@@ -32,14 +39,21 @@ export default async function AnnouncementsPage() {
     pic_discord_id: String(s.pic_discord_id ?? "").trim(),
   }));
 
-  const error = announcementsResult.error ?? stickersResult.error;
+  const channels = ((channelsResult.data ?? []) as Channel[]).map((c) => ({
+    channel_name: String(c.channel_name ?? ""),
+    channel_id: String(c.channel_id ?? "").trim(),
+    type: String(c.type ?? ""),
+  }));
+
+  const error =
+    announcementsResult.error ?? stickersResult.error ?? channelsResult.error;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">公告</h1>
         <p className="mt-1 text-sm text-slate-500">
-          管理定时公告内容、发送周几与时间
+          管理定时公告内容、投放频道、发送周几与时间
         </p>
       </div>
 
@@ -56,6 +70,7 @@ export default async function AnnouncementsPage() {
       <AnnouncementsManager
         announcements={announcements}
         stickers={stickers}
+        channels={channels}
       />
     </div>
   );

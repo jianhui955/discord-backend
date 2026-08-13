@@ -79,6 +79,8 @@ export interface Announcement {
   date: Weekday[];
   /** HH:MM */
   time: string;
+  /** 投放频道 ID */
+  channel_id: string;
   status: boolean;
   created_at: string;
 }
@@ -119,6 +121,7 @@ export function mapAnnouncementRow(row: Record<string, unknown>): Announcement {
     content: String(row.content ?? ""),
     date: normalizeWeekdays(row.date),
     time: String(row.time ?? "").trim(),
+    channel_id: String(row.channel_id ?? "").trim(),
     status,
     created_at: String(row.created_at ?? ""),
   };

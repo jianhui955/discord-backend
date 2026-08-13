@@ -195,6 +195,7 @@ create table if not exists public.announcements (
   content     text not null,
   date        jsonb not null default '[]'::jsonb,
   time        text not null default '',
+  channel_id  text,
   status      boolean not null default true,
   created_at  timestamptz not null default now()
 );
@@ -211,3 +212,6 @@ create policy "authenticated_full_access"
   to authenticated
   using (true)
   with check (true);
+
+-- 已有表若缺少 channel_id 列，执行：
+-- alter table public.announcements add column if not exists channel_id text;

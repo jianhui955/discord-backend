@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import {
   deleteAnnouncement,
   upsertAnnouncement,
@@ -12,6 +12,7 @@ import {
   discordStickerUrlCandidates,
   formatWeekdays,
   type Announcement,
+  type Channel,
   type Sticker,
   type Weekday,
 } from "@/lib/types";
@@ -21,14 +22,22 @@ const initialState: ActionState = {};
 export function AnnouncementsManager({
   announcements,
   stickers,
+  channels,
 }: {
   announcements: Announcement[];
   stickers: Sticker[];
+  channels: Channel[];
 }) {
   const [editing, setEditing] = useState<Announcement | null | undefined>(
     undefined,
   );
   const modalOpen = editing !== undefined;
+
+  const channelMap = useMemo(() => {
+    const m = new Map<string, Channel>();
+    for (const c of channels) m.set(c.channel_id, c);
+    return m;
+  }, [channels]);
 
   return (
     <div className="space-y-4">
@@ -36,8 +45,8 @@ export function AnnouncementsManager({
         <div>
           <h2 className="text-base font-semibold text-slate-800">公告列表</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            对应 <code>announcements</code> 表；周几存入{" "}
-            <code>date</code>（JSON），时间存入 <code>time</code>
+            对应 <code>announcements</code> 表；投放频道存入{" "}
+            <code>channel_id</code>
           </p>
         </div>
         <button
@@ -53,10 +62,11 @@ export function AnnouncementsManager({
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <div className="overflow-x-auto scrollbar-thin">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full min-w-[800px] text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <th className="px-5 py-3 font-medium">内容</th>
+                <th className="px-5 py-3 font-medium">投放平台</th>
                 <th className="px-5 py-3 font-medium">周几</th>
                 <th className="px-5 py-3 font-medium">时间</th>
                 <th className="px-5 py-3 font-medium">状态</th>
@@ -67,7 +77,7 @@ export function AnnouncementsManager({
             <tbody className="divide-y divide-slate-100">
               {announcements.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-12 text-center text-slate-400">
+                  <td colSpan={7} className="px-5 py-12 text-center text-slate-400">
                     暂无公告，点击「新增公告」添加
                   </td>
                 </tr>
@@ -76,6 +86,10 @@ export function AnnouncementsManager({
                   <tr key={a.id} className="transition hover:bg-slate-50/60">
                     <td className="max-w-md truncate px-5 py-3.5 text-slate-800">
                       {a.content}
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-700">
+                      {channelMap.get(a.channel_id)?.channel_name ??
+                        (a.channel_id || "—")}
                     </td>
                     <td className="px-5 py-3.5 text-slate-700">
                       {formatWeekdays(a.date)}
@@ -112,6 +126,7 @@ export function AnnouncementsManager({
         <AnnouncementModal
           announcement={editing ?? null}
           stickers={stickers}
+          channels={channels}
           onClose={() => setEditing(undefined)}
         />
       ) : null}
@@ -159,10 +174,12 @@ function DeleteButton({ id, preview }: { id: string; preview: string }) {
 function AnnouncementModal({
   announcement,
   stickers,
+  channels,
   onClose,
 }: {
   announcement: Announcement | null;
   stickers: Sticker[];
+  channels: Channel[];
   onClose: () => void;
 }) {
   const [state, formAction, pending] = useActionState(
@@ -275,6 +292,32 @@ function AnnouncementModal({
               </div>
             )}
           </div>
+
+          <Field label="投放平台" required>
+            <select
+              name="channel_id"
+              required
+              defaultValue={announcement?.channel_id ?? ""}
+              disabled={channels.length === 0}
+              className={inputClass}
+            >
+              <option value="">请选择频道…</option>
+              {channels.map((c) => (
+                <option key={c.channel_id} value={c.channel_id}>
+                  {c.channel_name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-400">
+              来自 <code>channel</code> 表（type = GuildText），存入{" "}
+              <code>channel_id</code>
+            </p>
+            {channels.length === 0 ? (
+              <p className="mt-1 text-xs text-amber-600">
+                暂无可用频道，请确认 channel 表有 type 为 GuildText 的数据。
+              </p>
+            ) : null}
+          </Field>
 
           <div>
             <p className="mb-1.5 text-sm font-medium text-slate-700">

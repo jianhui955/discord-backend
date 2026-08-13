@@ -48,6 +48,7 @@ export async function upsertAnnouncement(
   const content = String(formData.get("content") ?? "").trim();
   const weekdays = parseWeekdaysFromForm(formData);
   const timeParsed = parseTime(formData.get("time"));
+  const channelId = String(formData.get("channel_id") ?? "").trim();
   const status = parseStatus(formData.get("status"));
 
   if (!content) return { error: "公告内容不能为空。" };
@@ -55,12 +56,14 @@ export async function upsertAnnouncement(
   if (timeParsed.error || !timeParsed.time) {
     return { error: timeParsed.error ?? "时间无效。" };
   }
+  if (!channelId) return { error: "请选择投放平台（频道）。" };
 
   const supabase = await createClient();
   const payload = {
     content,
     date: weekdays,
     time: timeParsed.time,
+    channel_id: channelId,
     status,
   };
 
