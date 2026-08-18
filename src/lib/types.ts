@@ -9,6 +9,11 @@ export interface Member {
   role: MemberRole;
   status: MemberStatus;
   note: string | null;
+  /**
+   * 人物介绍（DeepSeek 提示词用）
+   * 用于生成回复/角色扮演时提供更完整的人设背景
+   */
+  introduce: string | null;
   created_at: string;
 }
 

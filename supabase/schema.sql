@@ -16,6 +16,7 @@ create table if not exists public.members (
   status     text not null default 'active'
              check (status in ('active', 'inactive', 'banned')),
   note       text,
+  introduce  text,
   created_at timestamptz not null default now()
 );
 

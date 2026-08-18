@@ -275,6 +275,19 @@ function MemberModal({
             />
           </Field>
 
+          <Field label="人物介绍（DeepSeek 提示词）">
+            <textarea
+              name="introduce"
+              rows={4}
+              defaultValue={member?.introduce ?? ""}
+              placeholder="给 DeepSeek / AI 用的人物介绍（可包含角色设定、语气风格、禁忌等）"
+              className={`${inputClass} resize-none`}
+            />
+            <p className="mt-1 text-xs text-slate-400">
+              将写入 `members.introduce`，用于后续 AI 生成时作为提示词。
+            </p>
+          </Field>
+
           {state.error ? (
             <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
               {state.error}

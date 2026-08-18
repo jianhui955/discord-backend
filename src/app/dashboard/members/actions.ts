@@ -19,6 +19,7 @@ export async function upsertMember(
   const role = String(formData.get("role") ?? "member") as MemberRole;
   const status = String(formData.get("status") ?? "active") as MemberStatus;
   const note = String(formData.get("note") ?? "").trim();
+  const introduce = String(formData.get("introduce") ?? "").trim();
   const dobRaw = String(formData.get("dob") ?? "").trim();
 
   if (!username) {
@@ -39,6 +40,7 @@ export async function upsertMember(
     role,
     status,
     note: note || null,
+    introduce: introduce || null,
   };
 
   const { error } = id
