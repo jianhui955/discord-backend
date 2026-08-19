@@ -20,19 +20,58 @@ import { formatNicknamesInput } from "@/lib/member-nickname";
 const ROLE_OPTIONS = Object.entries(ROLE_LABELS) as [MemberRole, string][];
 const STATUS_OPTIONS = Object.entries(STATUS_LABELS) as [MemberStatus, string][];
 
+type DobSort = "none" | "asc" | "desc";
+
+/** 只看月日，忽略年份；无效/空返回 null */
+function dobMonthDayKey(dob: string | null | undefined): number | null {
+  if (!dob) return null;
+  const match = dob.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return month * 100 + day;
+    }
+    return null;
+  }
+  const date = new Date(dob);
+  if (Number.isNaN(date.getTime())) return null;
+  return (date.getMonth() + 1) * 100 + date.getDate();
+}
+
 export function MembersManager({ members }: { members: Member[] }) {
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Member | null | undefined>(undefined);
+  const [dobSort, setDobSort] = useState<DobSort>("none");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return members;
-    return members.filter(
-      (m) =>
-        m.username.toLowerCase().includes(q) ||
-        (m.email ?? "").toLowerCase().includes(q),
+    const list = q
+      ? members.filter(
+          (m) =>
+            m.username.toLowerCase().includes(q) ||
+            (m.email ?? "").toLowerCase().includes(q),
+        )
+      : members;
+
+    if (dobSort === "none") return list;
+
+    return [...list].sort((a, b) => {
+      const ka = dobMonthDayKey(a.dob);
+      const kb = dobMonthDayKey(b.dob);
+      if (ka == null && kb == null) return 0;
+      if (ka == null) return 1;
+      if (kb == null) return -1;
+      const diff = ka - kb;
+      return dobSort === "asc" ? diff : -diff;
+    });
+  }, [members, query, dobSort]);
+
+  function cycleDobSort() {
+    setDobSort((prev) =>
+      prev === "none" ? "asc" : prev === "asc" ? "desc" : "none",
     );
-  }, [members, query]);
+  }
 
   const modalOpen = editing !== undefined;
 
@@ -71,7 +110,19 @@ export function MembersManager({ members }: { members: Member[] }) {
               <tr className="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <th className="px-5 py-3 font-medium">用户名</th>
                 <th className="px-5 py-3 font-medium">邮箱</th>
-                <th className="px-5 py-3 font-medium">生日</th>
+                <th className="px-5 py-3 font-medium">
+                  <button
+                    type="button"
+                    onClick={cycleDobSort}
+                    className="inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-slate-500 transition hover:text-slate-800"
+                    title="按月日排序（忽略年份），空值排最后"
+                  >
+                    生日
+                    <span className="text-[10px] text-slate-400" aria-hidden>
+                      {dobSort === "asc" ? "↑" : dobSort === "desc" ? "↓" : "↕"}
+                    </span>
+                  </button>
+                </th>
                 <th className="px-5 py-3 font-medium">角色</th>
                 <th className="px-5 py-3 font-medium">状态</th>
                 <th className="px-5 py-3 font-medium">创建时间</th>
