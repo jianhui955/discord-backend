@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { normalizeNicknames } from "@/lib/member-nickname";
 import type { Member } from "@/lib/types";
 import { MembersManager } from "@/components/members-manager";
 
@@ -11,7 +12,10 @@ export default async function MembersPage() {
     .select("*")
     .order("created_at", { ascending: false });
 
-  const members = (data ?? []) as Member[];
+  const members = ((data ?? []) as Record<string, unknown>[]).map((row) => ({
+    ...(row as unknown as Member),
+    nickname: normalizeNicknames(row.nickname),
+  }));
 
   return (
     <div className="space-y-6">

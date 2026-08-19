@@ -17,6 +17,7 @@ create table if not exists public.members (
              check (status in ('active', 'inactive', 'banned')),
   note       text,
   introduce  text,
+  nickname   jsonb,
   created_at timestamptz not null default now()
 );
 
@@ -25,6 +26,8 @@ create index if not exists members_created_at_idx
 
 -- 已有数据库若缺少 dob 列，执行以下语句：
 -- alter table public.members add column if not exists dob date;
+-- alter table public.members add column if not exists introduce text;
+-- alter table public.members add column if not exists nickname jsonb;
 
 -- 开启行级安全
 alter table public.members enable row level security;

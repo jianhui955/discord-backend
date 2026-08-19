@@ -14,6 +14,8 @@ export interface Member {
    * 用于生成回复/角色扮演时提供更完整的人设背景
    */
   introduce: string | null;
+  /** 小名列表，DB 存 json/jsonb 数组 */
+  nickname: string[] | null;
   created_at: string;
 }
 

@@ -15,6 +15,7 @@ import {
 } from "@/app/dashboard/members/actions";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate, formatDateTime, toDateInputValue } from "@/lib/format";
+import { formatNicknamesInput } from "@/lib/member-nickname";
 
 const ROLE_OPTIONS = Object.entries(ROLE_LABELS) as [MemberRole, string][];
 const STATUS_OPTIONS = Object.entries(STATUS_LABELS) as [MemberStatus, string][];
@@ -214,6 +215,18 @@ function MemberModal({
               placeholder="请输入用户名"
               className={inputClass}
             />
+          </Field>
+
+          <Field label="小名">
+            <input
+              name="nickname"
+              defaultValue={formatNicknamesInput(member?.nickname)}
+              placeholder="多个小名用逗号分隔，例如：小明,阿明"
+              className={inputClass}
+            />
+            <p className="mt-1 text-xs text-slate-400">
+              多个小名用英文逗号分隔，存入 <code>nickname</code>（JSON 数组）
+            </p>
           </Field>
 
           <Field label="邮箱">

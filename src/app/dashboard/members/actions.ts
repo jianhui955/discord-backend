@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { parseNicknamesInput } from "@/lib/member-nickname";
 import type { MemberRole, MemberStatus } from "@/lib/types";
 
 export type ActionState = { error?: string; success?: boolean };
@@ -20,6 +21,7 @@ export async function upsertMember(
   const status = String(formData.get("status") ?? "active") as MemberStatus;
   const note = String(formData.get("note") ?? "").trim();
   const introduce = String(formData.get("introduce") ?? "").trim();
+  const nicknames = parseNicknamesInput(String(formData.get("nickname") ?? ""));
   const dobRaw = String(formData.get("dob") ?? "").trim();
 
   if (!username) {
@@ -41,6 +43,7 @@ export async function upsertMember(
     status,
     note: note || null,
     introduce: introduce || null,
+    nickname: nicknames.length > 0 ? nicknames : null,
   };
 
   const { error } = id
