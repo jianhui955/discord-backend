@@ -8,6 +8,7 @@ services:
     region: singapore
     buildCommand: npm ci && npm run build
     startCommand: npm start
+    healthCheckPath: /ping
     autoDeploy: true
     envVars:
       # 固定 Node 版本（Next 15 需要 18.18+ / 20+）
@@ -17,4 +18,15 @@ services:
       - key: NEXT_PUBLIC_SUPABASE_URL
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # Discord bot（与后台共用同一个 Web Service）
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: CLIENT_ID
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
         sync: false
