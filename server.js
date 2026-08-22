@@ -21,6 +21,15 @@ app.prepare().then(() => {
   }
 
   createServer((req, res) => {
+    const pathname = req.url ? parse(req.url, true).pathname : "";
+    if (pathname === "/ping" && (req.method === "HEAD" || req.method === "GET")) {
+      console.log(`[ping] ${req.method} ${new Date().toISOString()}`);
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/json");
+      res.end(req.method === "HEAD" ? undefined : JSON.stringify({ status: "ok" }));
+      return;
+    }
+
     handle(req, res, parse(req.url, true));
   }).listen(port, () => {
     console.log(`🌐 Web + bot listening on port ${port}`);
