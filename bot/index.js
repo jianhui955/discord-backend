@@ -271,16 +271,16 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
 
-    if (
-        interaction.commandName === 'ask' &&
-        !ASK_CHANNEL_IDS.has(interaction.channelId)
-    ) {
-        await interaction.reply({
-            content: '❌ 此指令只能在指定的 Bot / 語音文字頻道使用。',
-            flags: MessageFlags.Ephemeral
-        });
-        return;
-    }
+    // if (
+    //     interaction.commandName === 'ask' &&
+    //     !ASK_CHANNEL_IDS.has(interaction.channelId)
+    // ) {
+    //     await interaction.reply({
+    //         content: '❌ 此指令只能在指定的 Bot / 語音文字頻道使用。',
+    //         flags: MessageFlags.Ephemeral
+    //     });
+    //     return;
+    // }
 
     // 允許在所有頻道使用 summary 指令，不做限制。
 
