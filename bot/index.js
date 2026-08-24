@@ -1,5 +1,6 @@
 // 非兌換碼功能已暫時停用，完整版本見 index.full.js
 
+require('node:dns').setDefaultResultOrder('ipv4first');
 require('dotenv').config();
 
 const {
@@ -307,7 +308,30 @@ client.on('error', error => {
     console.error('❌ Discord client error:', error);
 });
 
+client.on('warn', message => {
+    console.warn('⚠️ Discord warn:', message);
+});
+
+client.on('shardError', (error, shardId) => {
+    console.error(`❌ Discord shard ${shardId} error:`, error);
+});
+
+function onDiscordDebug(info) {
+    if (/heartbeat/i.test(info)) return;
+    console.log('[discord]', info);
+}
+
+client.on('debug', onDiscordDebug);
+
+const readyTimeout = setTimeout(() => {
+    if (!client.isReady()) {
+        console.error('❌ Discord bot still not ready after 20s (Gateway may be blocked or hanging).');
+    }
+}, 20000);
+
 client.once('clientReady', async () => {
+    clearTimeout(readyTimeout);
+    client.off('debug', onDiscordDebug);
     console.log(`✅ ${client.user.tag} 已上線！`);
 
     try {

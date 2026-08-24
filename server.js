@@ -1,3 +1,4 @@
+require("node:dns").setDefaultResultOrder("ipv4first");
 require("dotenv").config({ path: ".env.local" });
 require("dotenv").config();
 
