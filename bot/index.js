@@ -303,14 +303,22 @@ async function registerCommands() {
     console.log('✅ Slash Commands registered!');
 }
 
+client.on('error', error => {
+    console.error('❌ Discord client error:', error);
+});
+
 client.once('clientReady', async () => {
     console.log(`✅ ${client.user.tag} 已上線！`);
 
-    // 活動開始提醒已停用（不再發到 EVENT_CHANNEL_ID）
-    // setupEventReminders(client, EVENT_CHANNEL_ID);
-    setupBirthdayReminders(client);
-    setupAnnouncementReminders(client, MEMBER_ROLE_ID);
-    setupCodeAutoSchedule(client);
+    try {
+        // 活動開始提醒已停用（不再發到 EVENT_CHANNEL_ID）
+        // setupEventReminders(client, EVENT_CHANNEL_ID);
+        setupBirthdayReminders(client);
+        setupAnnouncementReminders(client, MEMBER_ROLE_ID);
+        setupCodeAutoSchedule(client);
+    } catch (error) {
+        console.error('❌ Failed to start scheduled bot jobs:', error);
+    }
 
     try {
         await registerCommands();
@@ -784,5 +792,8 @@ client.on('messageCreate', async (message) => {
 if (!process.env.DISCORD_TOKEN) {
     console.warn('⚠️ DISCORD_TOKEN is missing; Discord bot will not start.');
 } else {
-    client.login(process.env.DISCORD_TOKEN);
+    console.log('🔌 Connecting Discord bot...');
+    client.login(process.env.DISCORD_TOKEN).catch(error => {
+        console.error('❌ Discord login failed:', error);
+    });
 }
