@@ -318,19 +318,16 @@ client.on('shardError', (error, shardId) => {
 
 function onDiscordDebug(info) {
     if (/heartbeat/i.test(info)) return;
-    console.log('[discord]', info);
+    console.warn('[discord]', info);
 }
 
 client.on('debug', onDiscordDebug);
 
-const readyTimeout = setTimeout(() => {
-    if (!client.isReady()) {
-        console.error('❌ Discord bot still not ready after 20s (Gateway may be blocked or hanging).');
-    }
-}, 20000);
+let announcedReady = false;
 
-client.once('clientReady', async () => {
-    clearTimeout(readyTimeout);
+async function onBotReady() {
+    if (announcedReady) return;
+    announcedReady = true;
     client.off('debug', onDiscordDebug);
     console.log(`✅ ${client.user.tag} 已上線！`);
 
@@ -349,7 +346,10 @@ client.once('clientReady', async () => {
     } catch (error) {
         console.error('❌ Slash Command registration failed:', error);
     }
-});
+}
+
+client.once('clientReady', onBotReady);
+client.once('ready', onBotReady);
 
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
@@ -813,11 +813,81 @@ client.on('messageCreate', async (message) => {
     });
 });
 
-if (!process.env.DISCORD_TOKEN) {
-    console.warn('⚠️ DISCORD_TOKEN is missing; Discord bot will not start.');
-} else {
-    console.log('🔌 Connecting Discord bot...');
-    client.login(process.env.DISCORD_TOKEN).catch(error => {
-        console.error('❌ Discord login failed:', error);
+function discordRestGet(pathname, token) {
+    const https = require('node:https');
+
+    return new Promise((resolve, reject) => {
+        const req = https.request(
+            {
+                hostname: 'discord.com',
+                path: pathname,
+                method: 'GET',
+                headers: {
+                    Authorization: `Bot ${token}`,
+                    'User-Agent': 'DiscordBot (https://github.com/discordjs/discord.js, 14)'
+                }
+            },
+            res => {
+                let body = '';
+                res.on('data', chunk => {
+                    body += chunk;
+                });
+                res.on('end', () => resolve({ status: res.statusCode, body }));
+            }
+        );
+
+        req.on('error', reject);
+        req.setTimeout(8000, () => {
+            req.destroy();
+            reject(new Error('Discord REST timeout after 8s'));
+        });
+        req.end();
     });
 }
+
+async function startDiscordBot() {
+    const token = String(process.env.DISCORD_TOKEN || '').trim();
+
+    if (!token) {
+        console.warn('⚠️ DISCORD_TOKEN is missing; Discord bot will not start.');
+        return;
+    }
+
+    console.log(`🔌 Checking Discord REST (token length ${token.length})...`);
+
+    try {
+        const me = await discordRestGet('/api/v10/users/@me', token);
+        if (me.status !== 200) {
+            throw new Error(`Discord REST /users/@me returned ${me.status}: ${me.body.slice(0, 200)}`);
+        }
+
+        const user = JSON.parse(me.body);
+        console.log(`✅ Discord REST ok: ${user.username}`);
+    } catch (error) {
+        console.error('❌ Discord REST preflight failed:', error);
+        return;
+    }
+
+    const readyTimeout = setTimeout(() => {
+        if (!client.isReady()) {
+            console.error(
+                '❌ Discord bot still not ready after 20s.',
+                `ws.status=${client.ws?.status}`,
+                `ws.gateway=${client.ws?.gateway || 'none'}`
+            );
+        }
+    }, 20000);
+
+    client.once('clientReady', () => clearTimeout(readyTimeout));
+    client.once('ready', () => clearTimeout(readyTimeout));
+
+    console.log('🔌 Connecting Discord gateway...');
+    try {
+        await client.login(token);
+    } catch (error) {
+        clearTimeout(readyTimeout);
+        console.error('❌ Discord login failed:', error);
+    }
+}
+
+startDiscordBot();

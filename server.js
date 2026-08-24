@@ -2,6 +2,17 @@ require("node:dns").setDefaultResultOrder("ipv4first");
 require("dotenv").config({ path: ".env.local" });
 require("dotenv").config();
 
+// Start Discord before Next.js patches fetch/WebSocket.
+if (process.env.DISCORD_TOKEN) {
+  try {
+    require("./bot/index.js");
+  } catch (error) {
+    console.error("❌ Failed to start Discord bot:", error);
+  }
+} else {
+  console.warn("⚠️ DISCORD_TOKEN is missing; starting web only.");
+}
+
 const { createServer } = require("http");
 const { parse } = require("url");
 const next = require("next");
@@ -11,16 +22,6 @@ const app = next({ dev: false });
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
-  if (process.env.DISCORD_TOKEN) {
-    try {
-      require("./bot/index.js");
-    } catch (error) {
-      console.error("❌ Failed to start Discord bot:", error);
-    }
-  } else {
-    console.warn("⚠️ DISCORD_TOKEN is missing; starting web only.");
-  }
-
   createServer((req, res) => {
     const pathname = req.url ? parse(req.url, true).pathname : "";
     if (pathname === "/ping" && (req.method === "HEAD" || req.method === "GET")) {
