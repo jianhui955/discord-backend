@@ -1,6 +1,6 @@
 const { askDeepSeek } = require('./deepseek');
 
-const HISTORY_LIMIT = 200;
+const HISTORY_LIMIT = 100;
 const MESSAGE_CONTENT_LIMIT = 300;
 const MAX_MESSAGE_GAP_MS = 30 * 60 * 1000;
 

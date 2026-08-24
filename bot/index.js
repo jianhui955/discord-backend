@@ -101,6 +101,75 @@ function formatMalaysiaTime(isoString) {
     });
 }
 
+function isExpiredInteraction(error) {
+    return error?.code === 10062 || error?.code === 40060;
+}
+
+async function safeReply(interaction, options) {
+    try {
+        if (interaction.replied || interaction.deferred) {
+            return await interaction.followUp(options);
+        }
+
+        return await interaction.reply(options);
+    } catch (error) {
+        if (isExpiredInteraction(error)) {
+            console.warn(`⚠️ /${interaction.commandName} reply skipped (${error.code})`);
+            return null;
+        }
+
+        throw error;
+    }
+}
+
+async function safeDefer(interaction, options) {
+    try {
+        if (interaction.replied || interaction.deferred) {
+            return true;
+        }
+
+        await interaction.deferReply(options);
+        return true;
+    } catch (error) {
+        if (isExpiredInteraction(error)) {
+            console.warn(`⚠️ /${interaction.commandName} defer skipped (${error.code})`);
+            return false;
+        }
+
+        throw error;
+    }
+}
+
+async function safeEdit(interaction, options) {
+    try {
+        if (!interaction.deferred && !interaction.replied) {
+            return null;
+        }
+
+        return await interaction.editReply(options);
+    } catch (error) {
+        if (isExpiredInteraction(error)) {
+            console.warn(`⚠️ /${interaction.commandName} edit skipped (${error.code})`);
+            return null;
+        }
+
+        throw error;
+    }
+}
+
+async function safeFollowUp(interaction, options) {
+    try {
+        return await interaction.followUp(options);
+    } catch (error) {
+        if (isExpiredInteraction(error)) {
+            console.warn(`⚠️ /${interaction.commandName} followUp skipped (${error.code})`);
+            return null;
+        }
+
+        throw error;
+    }
+}
+
 async function replyLong(interaction, text, ephemeral = true) {
     const chunks = [];
     let current = '';
@@ -124,7 +193,11 @@ async function replyLong(interaction, text, ephemeral = true) {
         replyOptions.flags = MessageFlags.Ephemeral;
     }
 
-    await interaction.reply(replyOptions);
+    if (interaction.deferred || interaction.replied) {
+        await safeEdit(interaction, replyOptions);
+    } else {
+        await safeReply(interaction, replyOptions);
+    }
 
     for (let i = 1; i < chunks.length; i++) {
         const followUpOptions = { content: chunks[i] };
@@ -133,7 +206,7 @@ async function replyLong(interaction, text, ephemeral = true) {
             followUpOptions.flags = MessageFlags.Ephemeral;
         }
 
-        await interaction.followUp(followUpOptions);
+        await safeFollowUp(interaction, followUpOptions);
     }
 }
 
@@ -249,11 +322,28 @@ client.once('clientReady', async () => {
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
+    try {
+        await handleSlashCommand(interaction);
+    } catch (error) {
+        if (isExpiredInteraction(error)) {
+            console.warn(`⚠️ /${interaction.commandName} interaction expired (${error.code})`);
+            return;
+        }
+
+        console.error(`/${interaction.commandName} failed:`, error?.message || error, error);
+        await safeReply(interaction, {
+            content: '❌ 指令執行失敗，請稍後再試。',
+            flags: MessageFlags.Ephemeral
+        });
+    }
+});
+
+async function handleSlashCommand(interaction) {
     if (
         CODE_CHANNEL_COMMANDS.has(interaction.commandName) &&
         interaction.channelId !== CODE_CHANNEL_ID
     ) {
-        await interaction.reply({
+        await safeReply(interaction, {
             content: `❌ 此指令只能在 <#${CODE_CHANNEL_ID}> 使用。`,
             flags: MessageFlags.Ephemeral
         });
@@ -264,7 +354,7 @@ client.on('interactionCreate', async (interaction) => {
         BOT_CHANNEL_COMMANDS.has(interaction.commandName) &&
         interaction.channelId !== BOT_CHANNEL_ID
     ) {
-        await interaction.reply({
+        await safeReply(interaction, {
             content: `❌ 此指令只能在 <#${BOT_CHANNEL_ID}> 使用。`,
             flags: MessageFlags.Ephemeral
         });
@@ -285,12 +375,12 @@ client.on('interactionCreate', async (interaction) => {
     // 允許在所有頻道使用 summary 指令，不做限制。
 
     if (interaction.commandName === 'ping') {
-        await interaction.reply('✅ 白雲機器人在線中！');
+        await safeReply(interaction, '✅ 白雲機器人在線中！');
         return;
     }
 
     if (interaction.commandName === 'code-help') {
-        await interaction.reply({
+        await safeReply(interaction, {
             content: HELP_TEXT,
             flags: MessageFlags.Ephemeral
         });
@@ -303,33 +393,24 @@ client.on('interactionCreate', async (interaction) => {
             .trim()
             .toUpperCase();
 
-        let record;
+        if (!(await safeDefer(interaction, { flags: MessageFlags.Ephemeral }))) return;
 
         try {
-            record = await findCode(inputCode);
-        } catch (error) {
-            console.error('code_info Supabase error:', error);
-            await interaction.reply({
-                content: '❌ 讀取兌換碼資料失敗，請稍後再試。',
-                flags: MessageFlags.Ephemeral
-            });
-            return;
-        }
+            const record = await findCode(inputCode);
 
-        if (!record) {
-            await interaction.reply({
+            if (!record) {
+                await safeEdit(interaction, {
+                    content:
+                        `❌ 找不到 **${inputCode}** 的歷史記錄。\n\n` +
+                        `如果這是今天以前就存在的舊兌換碼，請重新發一次後才會開始記錄時間。`
+                });
+                return;
+            }
+
+            const malaysiaTime = formatMalaysiaTime(record.created_at);
+
+            await safeEdit(interaction, {
                 content:
-                    `❌ 找不到 **${inputCode}** 的歷史記錄。\n\n` +
-                    `如果這是今天以前就存在的舊兌換碼，請重新發一次後才會開始記錄時間。`,
-                flags: MessageFlags.Ephemeral
-            });
-            return;
-        }
-
-        const malaysiaTime = formatMalaysiaTime(record.created_at);
-
-        await interaction.reply({
-            content:
 `📋 **兌換碼資訊**
 
 🔑 兌換碼：
@@ -339,9 +420,14 @@ ${record.code}
 ${malaysiaTime}
 
 📌 狀態：
-${record.status}`,
-            flags: MessageFlags.Ephemeral
-        });
+${record.status}`
+            });
+        } catch (error) {
+            console.error('code_info Supabase error:', error);
+            await safeEdit(interaction, {
+                content: '❌ 讀取兌換碼資料失敗，請稍後再試。'
+            });
+        }
         return;
     }
 
@@ -351,63 +437,56 @@ ${record.status}`,
             .trim()
             .toUpperCase();
 
-        let deleted;
+        if (!(await safeDefer(interaction, { flags: MessageFlags.Ephemeral }))) return;
 
         try {
-            deleted = await deleteCode(inputCode);
+            const deleted = await deleteCode(inputCode);
+
+            if (!deleted) {
+                await safeEdit(interaction, {
+                    content: `❌ 找不到 **${inputCode}**，無法刪除。`
+                });
+                return;
+            }
+
+            await safeEdit(interaction, {
+                content: `✅ 已刪除兌換碼：**${deleted.code}**`
+            });
         } catch (error) {
             console.error('del Supabase error:', error);
-            await interaction.reply({
-                content: '❌ 刪除兌換碼失敗，請稍後再試。',
-                flags: MessageFlags.Ephemeral
+            await safeEdit(interaction, {
+                content: '❌ 刪除兌換碼失敗，請稍後再試。'
             });
-            return;
         }
-
-        if (!deleted) {
-            await interaction.reply({
-                content: `❌ 找不到 **${inputCode}**，無法刪除。`,
-                flags: MessageFlags.Ephemeral
-            });
-            return;
-        }
-
-        await interaction.reply({
-            content: `✅ 已刪除兌換碼：**${deleted.code}**`,
-            flags: MessageFlags.Ephemeral
-        });
         return;
     }
 
     if (interaction.commandName === 'show-code-list') {
-        let records;
+        if (!(await safeDefer(interaction, { flags: MessageFlags.Ephemeral }))) return;
 
         try {
-            records = await listAllCodes();
+            const records = await listAllCodes();
+
+            if (records.length === 0) {
+                await safeEdit(interaction, {
+                    content: '📋 最近 3 天內沒有任何兌換碼記錄。'
+                });
+                return;
+            }
+
+            let text = `📋 **兌換碼列表**（最近 3 天，共 ${records.length} 筆，最多 30 筆）\n\n`;
+
+            for (const record of records) {
+                text += `🔑 ${record.code} | ${record.status} | ${formatMalaysiaTime(record.created_at)}\n`;
+            }
+
+            await replyLong(interaction, text);
         } catch (error) {
             console.error('show-code-list Supabase error:', error);
-            await interaction.reply({
-                content: '❌ 讀取兌換碼列表失敗，請稍後再試。',
-                flags: MessageFlags.Ephemeral
+            await safeEdit(interaction, {
+                content: '❌ 讀取兌換碼列表失敗，請稍後再試。'
             });
-            return;
         }
-
-        if (records.length === 0) {
-            await interaction.reply({
-                content: '📋 最近 3 天內沒有任何兌換碼記錄。',
-                flags: MessageFlags.Ephemeral
-            });
-            return;
-        }
-
-        let text = `📋 **兌換碼列表**（最近 3 天，共 ${records.length} 筆，最多 30 筆）\n\n`;
-
-        for (const record of records) {
-            text += `🔑 ${record.code} | ${record.status} | ${formatMalaysiaTime(record.created_at)}\n`;
-        }
-
-        await replyLong(interaction, text);
         return;
     }
 
@@ -420,12 +499,12 @@ ${record.status}`,
     }
 
     if (interaction.commandName === 'sync-members') {
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        if (!(await safeDefer(interaction, { flags: MessageFlags.Ephemeral }))) return;
 
         const guild = interaction.guild;
 
         if (!guild) {
-            await interaction.editReply('❌ 此指令只能在伺服器內使用。');
+            await safeEdit(interaction, '❌ 此指令只能在伺服器內使用。');
             return;
         }
 
@@ -450,22 +529,22 @@ ${record.status}`,
                 reply += `\n⏸️ 已將 **${removed}** 位不再擁有該身份組的成員標記為 inactive。`;
             }
 
-            await interaction.editReply(reply);
+            await safeEdit(interaction, reply);
         } catch (error) {
             console.error('sync-members error:', error?.message || error, error);
-            await interaction.editReply('❌ 同步成員失敗，請稍後再試。');
+            await safeEdit(interaction, '❌ 同步成員失敗，請稍後再試。');
         }
 
         return;
     }
 
     if (interaction.commandName === 'sync_pic') {
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        if (!(await safeDefer(interaction, { flags: MessageFlags.Ephemeral }))) return;
 
         const guild = interaction.guild;
 
         if (!guild) {
-            await interaction.editReply('❌ 此指令只能在伺服器內使用。');
+            await safeEdit(interaction, '❌ 此指令只能在伺服器內使用。');
             return;
         }
 
@@ -480,25 +559,26 @@ ${record.status}`,
 
             const { synced, inserted, updated } = await syncStickers(rows);
 
-            await interaction.editReply(
+            await safeEdit(
+                interaction,
                 `✅ 已同步 **${synced}** 個伺服器表情到資料庫。\n` +
                 `新增 **${inserted}** 個，更新 **${updated}** 個。`
             );
         } catch (error) {
             console.error('sync_pic error:', error?.message || error, error);
-            await interaction.editReply('❌ 同步表情失敗，請稍後再試。');
+            await safeEdit(interaction, '❌ 同步表情失敗，請稍後再試。');
         }
 
         return;
     }
 
     if (interaction.commandName === 'sync_channels') {
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        if (!(await safeDefer(interaction, { flags: MessageFlags.Ephemeral }))) return;
 
         const guild = interaction.guild;
 
         if (!guild) {
-            await interaction.editReply('❌ 此指令只能在伺服器內使用。');
+            await safeEdit(interaction, '❌ 此指令只能在伺服器內使用。');
             return;
         }
 
@@ -513,13 +593,14 @@ ${record.status}`,
 
             const { synced, inserted, updated } = await syncChannels(rows);
 
-            await interaction.editReply(
+            await safeEdit(
+                interaction,
                 `✅ 已同步 **${synced}** 個頻道到資料庫。\n` +
                 `新增 **${inserted}** 個，更新 **${updated}** 個。`
             );
         } catch (error) {
             console.error('sync_channels error:', error?.message || error, error);
-            await interaction.editReply('❌ 同步頻道失敗，請稍後再試。');
+            await safeEdit(interaction, '❌ 同步頻道失敗，請稍後再試。');
         }
 
         return;
@@ -530,7 +611,7 @@ ${record.status}`,
         const channelId = interaction.channelId;
         const userId = interaction.user.id;
 
-        await interaction.deferReply();
+        if (!(await safeDefer(interaction))) return;
 
         try {
             const { systemPrompt, maxHistory } = await getConversationConfig(channelId);
@@ -550,13 +631,14 @@ ${record.status}`,
                 ? `${answer.slice(0, maxAnswerLength - 1)}…`
                 : answer;
 
-            await interaction.editReply({
+            await safeEdit(interaction, {
                 content: header + body,
                 allowedMentions: { users: [userId] }
             });
         } catch (error) {
             console.error('ask DeepSeek error:', error?.message || error, error);
-            await interaction.editReply(
+            await safeEdit(
+                interaction,
                 `<@${userId}> 問：${question}\n\n❌ AI 回答失敗，請稍後再試。`
             );
         }
@@ -579,15 +661,16 @@ ${record.status}`,
                 ? `${minutes} 分 ${seconds} 秒`
                 : `${seconds} 秒`;
 
-            await interaction.reply({
+            await safeReply(interaction, {
                 content: `⏳ 此頻道 /summary 冷卻中，請再等 **${waitText}**。`,
                 flags: MessageFlags.Ephemeral
             });
             return;
         }
 
-        summaryCooldowns.set(channelId, now);
-        await interaction.deferReply();
+        if (!(await safeDefer(interaction))) return;
+
+        summaryCooldowns.set(channelId, Date.now());
 
         try {
             const summary = await summarizeChannel(interaction.channel);
@@ -595,33 +678,32 @@ ${record.status}`,
             const full = header + summary;
 
             if (full.length <= 1900) {
-                await interaction.editReply({
+                await safeEdit(interaction, {
                     content: full,
                     allowedMentions: { users: [userId] }
                 });
             } else {
-                await interaction.editReply({
+                await safeEdit(interaction, {
                     content: full.slice(0, 1900),
                     allowedMentions: { users: [userId] }
                 });
 
                 let remaining = full.slice(1900);
                 while (remaining.length > 0) {
-                    await interaction.followUp({ content: remaining.slice(0, 1900) });
+                    await safeFollowUp(interaction, { content: remaining.slice(0, 1900) });
                     remaining = remaining.slice(1900);
                 }
             }
         } catch (error) {
             summaryCooldowns.delete(channelId);
             console.error('summary DeepSeek error:', error?.message || error, error);
-            await interaction.editReply(
+            await safeEdit(
+                interaction,
                 `❌ 總結失敗：${error.message || '請稍後再試。'}`
             );
         }
-
-        return;
     }
-});
+}
 
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;

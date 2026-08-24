@@ -927,11 +927,16 @@ function setupEventHandlers(client) {
                 flags: MessageFlags.Ephemeral
             });
         } catch (error) {
+            if (error?.code === 10062 || error?.code === 40060) {
+                console.warn(`⚠️ event button interaction expired (${error.code})`);
+                return;
+            }
+
             console.error('按鈕處理失敗:', error);
             await interaction.reply({
                 content: '❌ 報名失敗，資料庫更新時出現錯誤。',
                 flags: MessageFlags.Ephemeral
-            });
+            }).catch(() => {});
         }
     });
 }
