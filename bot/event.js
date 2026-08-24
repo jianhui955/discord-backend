@@ -11,6 +11,66 @@ const supabase = require('./supabase');
 const EVENT_TIMEZONE = 'Asia/Hong_Kong';
 const BUTTON_PREFIX = 'event_role_';
 
+function isExpiredInteraction(error) {
+    return error?.code === 10062 || error?.code === 40060;
+}
+
+async function safeDeferUpdate(interaction) {
+    try {
+        if (interaction.deferred || interaction.replied) return true;
+        await interaction.deferUpdate();
+        return true;
+    } catch (error) {
+        if (isExpiredInteraction(error)) {
+            console.warn(`⚠️ event button expired on defer (${error.code})`);
+            return false;
+        }
+        throw error;
+    }
+}
+
+async function safeDeferReply(interaction, options) {
+    try {
+        if (interaction.deferred || interaction.replied) return true;
+        await interaction.deferReply(options);
+        return true;
+    } catch (error) {
+        if (isExpiredInteraction(error)) {
+            console.warn(`⚠️ event button expired on defer (${error.code})`);
+            return false;
+        }
+        throw error;
+    }
+}
+
+async function safeReply(interaction, options) {
+    try {
+        if (interaction.deferred || interaction.replied) {
+            return await interaction.followUp(options);
+        }
+        return await interaction.reply(options);
+    } catch (error) {
+        if (isExpiredInteraction(error)) {
+            console.warn(`⚠️ event button expired on reply (${error.code})`);
+            return null;
+        }
+        throw error;
+    }
+}
+
+async function safeEdit(interaction, options) {
+    try {
+        if (!interaction.deferred && !interaction.replied) return null;
+        return await interaction.editReply(options);
+    } catch (error) {
+        if (isExpiredInteraction(error)) {
+            console.warn(`⚠️ event button expired on edit (${error.code})`);
+            return null;
+        }
+        throw error;
+    }
+}
+
 function parseSingleDatePart(dateRaw) {
     const value = String(dateRaw || '').trim();
 
@@ -761,11 +821,13 @@ async function handleCreateEventSlash(interaction, allowedChannelIds) {
 }
 
 async function handleEventRoleButton(interaction) {
+    if (!(await safeDeferUpdate(interaction))) return;
+
     const payload = interaction.customId.slice(BUTTON_PREFIX.length);
     const splitAt = payload.indexOf('_');
 
     if (splitAt <= 0) {
-        await interaction.reply({
+        await safeReply(interaction, {
             content: '❌ 無效的報名按鈕。',
             flags: MessageFlags.Ephemeral
         });
@@ -778,14 +840,12 @@ async function handleEventRoleButton(interaction) {
     const username = interaction.member?.displayName || interaction.user.username;
 
     if (!Number.isFinite(eventId) || !Number.isFinite(gameRoleId)) {
-        await interaction.reply({
+        await safeReply(interaction, {
             content: '❌ 無效的報名按鈕。',
             flags: MessageFlags.Ephemeral
         });
         return;
     }
-
-    await interaction.deferUpdate();
 
     const { data: eventRow, error: eventError } = await supabase
         .from('event')
@@ -865,19 +925,17 @@ function setupEventHandlers(client) {
             try {
                 await handleEventRoleButton(interaction);
             } catch (error) {
+                if (isExpiredInteraction(error)) {
+                    console.warn(`⚠️ event role button expired (${error.code})`);
+                    return;
+                }
+
                 console.error('活動報名按鈕失敗:', error);
 
-                if (!interaction.replied && !interaction.deferred) {
-                    await interaction.reply({
-                        content: '❌ 報名失敗，請稍後再試。',
-                        flags: MessageFlags.Ephemeral
-                    }).catch(() => {});
-                } else {
-                    await interaction.followUp({
-                        content: '❌ 報名失敗，請稍後再試。',
-                        flags: MessageFlags.Ephemeral
-                    }).catch(() => {});
-                }
+                await safeReply(interaction, {
+                    content: '❌ 報名失敗，請稍後再試。',
+                    flags: MessageFlags.Ephemeral
+                });
             }
             return;
         }
@@ -888,6 +946,8 @@ function setupEventHandlers(client) {
         const userId = interaction.user.id;
 
         try {
+            if (!(await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral }))) return;
+
             const { data: eventData, error: fetchError } = await supabase
                 .from('event_guild')
                 .select('member, event_id')
@@ -899,9 +959,8 @@ function setupEventHandlers(client) {
             const currentMembers = memberUserIds(eventData?.member);
 
             if (currentMembers.includes(userId)) {
-                await interaction.reply({
-                    content: 'ℹ️ 你已經報名過這場活動囉！',
-                    flags: MessageFlags.Ephemeral
+                await safeEdit(interaction, {
+                    content: 'ℹ️ 你已經報名過這場活動囉！'
                 });
                 return;
             }
@@ -922,21 +981,20 @@ function setupEventHandlers(client) {
 
             if (updateError) throw updateError;
 
-            await interaction.reply({
-                content: `🎉 報名成功！你已成功加入場次 **#${eventGuildId}** 的名單。`,
-                flags: MessageFlags.Ephemeral
+            await safeEdit(interaction, {
+                content: `🎉 報名成功！你已成功加入場次 **#${eventGuildId}** 的名單。`
             });
         } catch (error) {
-            if (error?.code === 10062 || error?.code === 40060) {
+            if (isExpiredInteraction(error)) {
                 console.warn(`⚠️ event button interaction expired (${error.code})`);
                 return;
             }
 
             console.error('按鈕處理失敗:', error);
-            await interaction.reply({
+            await safeReply(interaction, {
                 content: '❌ 報名失敗，資料庫更新時出現錯誤。',
                 flags: MessageFlags.Ephemeral
-            }).catch(() => {});
+            });
         }
     });
 }
