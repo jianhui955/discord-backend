@@ -1,6 +1,5 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
-import WebSocket from "ws";
 
 /**
  * 服务端专用的 Supabase 管理客户端，使用 service_role 密钥。
@@ -21,9 +20,6 @@ export function createAdminClient() {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
-    },
-    realtime: {
-      transport: WebSocket,
     },
   });
 }
