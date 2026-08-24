@@ -342,10 +342,13 @@ async function onBotReady() {
         console.error('❌ Failed to start scheduled bot jobs:', error);
     }
 
-    try {
-        await registerCommands();
-    } catch (error) {
-        console.error('❌ Slash Command registration failed:', error);
+    // Slash commands persist on Discord; re-registering on every boot burns REST quota.
+    if (process.env.REGISTER_SLASH_COMMANDS === '1') {
+        try {
+            await registerCommands();
+        } catch (error) {
+            console.error('❌ Slash Command registration failed:', error);
+        }
     }
 }
 
@@ -814,58 +817,11 @@ client.on('messageCreate', async (message) => {
     });
 });
 
-function discordRestGet(pathname, token) {
-    const https = require('node:https');
-
-    return new Promise((resolve, reject) => {
-        const req = https.request(
-            {
-                hostname: 'discord.com',
-                path: pathname,
-                method: 'GET',
-                headers: {
-                    Authorization: `Bot ${token}`,
-                    'User-Agent': 'DiscordBot (https://github.com/discordjs/discord.js, 14)'
-                }
-            },
-            res => {
-                let body = '';
-                res.on('data', chunk => {
-                    body += chunk;
-                });
-                res.on('end', () => resolve({ status: res.statusCode, body }));
-            }
-        );
-
-        req.on('error', reject);
-        req.setTimeout(8000, () => {
-            req.destroy();
-            reject(new Error('Discord REST timeout after 8s'));
-        });
-        req.end();
-    });
-}
-
 async function startDiscordBot() {
     const token = String(process.env.DISCORD_TOKEN || '').trim();
 
     if (!token) {
         console.warn('⚠️ DISCORD_TOKEN is missing; Discord bot will not start.');
-        return;
-    }
-
-    console.log(`🔌 Checking Discord REST (token length ${token.length})...`);
-
-    try {
-        const me = await discordRestGet('/api/v10/users/@me', token);
-        if (me.status !== 200) {
-            throw new Error(`Discord REST /users/@me returned ${me.status}: ${me.body.slice(0, 200)}`);
-        }
-
-        const user = JSON.parse(me.body);
-        console.log(`✅ Discord REST ok: ${user.username}`);
-    } catch (error) {
-        console.error('❌ Discord REST preflight failed:', error);
         return;
     }
 
