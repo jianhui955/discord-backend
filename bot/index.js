@@ -204,24 +204,6 @@ async function replyLong(interaction, text, ephemeral = true) {
     }
 }
 
-const discordRestOptions = {
-    timeout: 15_000,
-    retries: 3
-};
-
-try {
-    const { Agent } = require('undici');
-    discordRestOptions.agent = new Agent({
-        connectTimeout: 10_000,
-        connect: {
-            family: 4,
-            timeout: 10_000
-        }
-    });
-} catch {
-    // undici not available; discord.js will use its default REST client
-}
-
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -229,8 +211,7 @@ const client = new Client({
         GatewayIntentBits.GuildEmojisAndStickers,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent
-    ],
-    rest: discordRestOptions
+    ]
 });
 
 // 啟用活動相關指令與按鈕
@@ -316,31 +297,12 @@ async function registerCommands() {
     console.log('✅ Slash Commands registered!');
 }
 
-client.on('error', error => {
-    console.error('❌ Discord client error:', error);
-});
+let botReady = false;
 
-client.on('warn', message => {
-    console.warn('⚠️ Discord warn:', message);
-});
+async function onClientReady() {
+    if (botReady) return;
+    botReady = true;
 
-client.on('shardError', (error, shardId) => {
-    console.error(`❌ Discord shard ${shardId} error:`, error);
-});
-
-function onDiscordDebug(info) {
-    if (/heartbeat/i.test(info)) return;
-    console.warn('[discord]', info);
-}
-
-client.on('debug', onDiscordDebug);
-
-let announcedReady = false;
-
-async function onBotReady() {
-    if (announcedReady) return;
-    announcedReady = true;
-    client.off('debug', onDiscordDebug);
     console.log(`✅ ${client.user.tag} 已上線！`);
 
     try {
@@ -353,7 +315,6 @@ async function onBotReady() {
         console.error('❌ Failed to start scheduled bot jobs:', error);
     }
 
-    // Slash commands persist on Discord; re-registering on every boot burns REST quota.
     if (process.env.REGISTER_SLASH_COMMANDS === '1') {
         try {
             await registerCommands();
@@ -363,8 +324,8 @@ async function onBotReady() {
     }
 }
 
-client.once('clientReady', onBotReady);
-client.once('ready', onBotReady);
+client.once('clientReady', onClientReady);
+client.once('ready', onClientReady);
 
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
@@ -828,78 +789,10 @@ client.on('messageCreate', async (message) => {
     });
 });
 
-async function startDiscordBot() {
-    const token = String(process.env.DISCORD_TOKEN || '').trim();
-
-    if (!token) {
-        console.warn('⚠️ DISCORD_TOKEN is missing; Discord bot will not start.');
-        return false;
-    }
-
-    try {
-        const res = await fetch('https://discord.com/api/v10/gateway/bot', {
-            headers: {
-                Authorization: `Bot ${token}`,
-                'User-Agent': 'DiscordBot (https://github.com/discordjs/discord.js, 14)'
-            },
-            signal: AbortSignal.timeout(10000)
-        });
-        const body = await res.text();
-        console.log(`[discord] GET /api/v10/gateway/bot status=${res.status} body=${body}`);
-    } catch (error) {
-        console.error('❌ Discord GET /api/v10/gateway/bot failed:', error);
-    }
-
-    const readyTimeout = setTimeout(() => {
-        if (!client.isReady()) {
-            console.error(
-                '❌ Discord bot still not ready after 20s.',
-                `ws.status=${client.ws?.status}`,
-                `ws.gateway=${client.ws?.gateway || 'none'}`
-            );
-        }
-    }, 20000);
-
-    client.once('clientReady', () => clearTimeout(readyTimeout));
-    client.once('ready', () => clearTimeout(readyTimeout));
-
-    console.log('🔌 Connecting Discord gateway...');
-    try {
-        await client.login(token);
-        return true;
-    } catch (error) {
-        clearTimeout(readyTimeout);
+if (!process.env.DISCORD_TOKEN) {
+    console.warn('⚠️ DISCORD_TOKEN is missing; Discord bot will not start.');
+} else {
+    client.login(process.env.DISCORD_TOKEN).catch(error => {
         console.error('❌ Discord login failed:', error);
-        return false;
-    }
-}
-
-function waitUntilReady(timeoutMs = 30000) {
-    if (client.isReady()) return Promise.resolve(true);
-
-    return new Promise(resolve => {
-        const onReady = () => {
-            clearTimeout(timer);
-            resolve(true);
-        };
-
-        const timer = setTimeout(() => {
-            client.off('clientReady', onReady);
-            client.off('ready', onReady);
-            resolve(false);
-        }, timeoutMs);
-
-        client.once('clientReady', onReady);
-        client.once('ready', onReady);
     });
-}
-
-module.exports = {
-    startDiscordBot,
-    waitUntilReady,
-    client
-};
-
-if (require.main === module) {
-    startDiscordBot();
 }

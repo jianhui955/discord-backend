@@ -30,21 +30,19 @@ const server = createServer((req, res) => {
   }
 
   res.statusCode = 503;
-  res.setHeader("Content-Type", "text/plain; charset=utf-8");
-  res.end("starting");
+  res.setHeader("Retry-After", "3");
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.end(
+    "<!doctype html><meta http-equiv=\"refresh\" content=\"3\"><p>后台启动中，请稍候自动刷新…</p>",
+  );
 });
 
-server.listen(port, async () => {
-  console.log(`🌐 Web listening on port ${port}`);
+server.listen(port, "0.0.0.0", async () => {
+  console.log(`🌐 Listening on port ${port}`);
 
   if (process.env.DISCORD_TOKEN) {
     try {
-      const { startDiscordBot, waitUntilReady } = require("./bot/index.js");
-      startDiscordBot();
-      const ready = await waitUntilReady(30_000);
-      if (!ready) {
-        console.warn("⚠️ Discord not ready after 30s; starting Next.js anyway.");
-      }
+      require("./bot/index.js");
     } catch (error) {
       console.error("❌ Failed to start Discord bot:", error);
     }
@@ -52,8 +50,6 @@ server.listen(port, async () => {
     console.warn("⚠️ DISCORD_TOKEN is missing; starting web only.");
   }
 
-  // Load Next only after Discord has had a chance to fetch the gateway.
-  // Next.js patches global fetch and can hang discord.js REST on Render.
   const next = require("next");
   const app = next({ dev: false });
   await app.prepare();
