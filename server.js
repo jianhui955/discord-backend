@@ -1,6 +1,7 @@
 require("node:dns").setDefaultResultOrder("ipv4first");
 require("dotenv").config({ path: ".env.local" });
 require("dotenv").config();
+require("./bot/polyfill-websocket");
 
 // Start Discord before Next.js patches fetch/WebSocket.
 if (process.env.DISCORD_TOKEN) {

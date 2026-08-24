@@ -1,6 +1,8 @@
 require('dotenv').config();
+require('./polyfill-websocket');
 
 const { createClient } = require('@supabase/supabase-js');
+const WebSocketImpl = require('ws');
 
 const supabaseUrl =
     process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -12,6 +14,10 @@ if (!supabaseUrl || !supabaseKey) {
     );
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseKey, {
+    realtime: {
+        transport: WebSocketImpl
+    }
+});
 
 module.exports = supabase;

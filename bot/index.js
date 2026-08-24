@@ -2,6 +2,7 @@
 
 require('node:dns').setDefaultResultOrder('ipv4first');
 require('dotenv').config();
+require('./polyfill-websocket');
 
 const {
     Client,
