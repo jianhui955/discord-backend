@@ -1,19 +1,11 @@
 // 非兌換碼功能已暫時停用，完整版本見 index.full.js
 
-require('node:dns').setDefaultResultOrder('ipv4first');
+const dns = require('node:dns');
+dns.setDefaultResultOrder('ipv4first');
 require('dotenv').config();
 require('./polyfill-websocket');
 
-const {
-    Client,
-    GatewayIntentBits,
-    REST,
-    Routes,
-    SlashCommandBuilder,
-    PermissionFlagsBits,
-    MessageFlags,
-    ChannelType
-} = require('discord.js');
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, PermissionFlagsBits, MessageFlags, ChannelType } = require('discord.js');
 const { findCode, findExistingCodes, insertCodes, deleteCode, listAllCodes } = require('./codes');
 const { syncMembers } = require('./members');
 const { syncStickers } = require('./stickers');
@@ -212,6 +204,24 @@ async function replyLong(interaction, text, ephemeral = true) {
     }
 }
 
+const discordRestOptions = {
+    timeout: 15_000,
+    retries: 3
+};
+
+try {
+    const { Agent } = require('undici');
+    discordRestOptions.agent = new Agent({
+        connectTimeout: 10_000,
+        connect: {
+            family: 4,
+            timeout: 10_000
+        }
+    });
+} catch {
+    // undici not available; discord.js will use its default REST client
+}
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -219,7 +229,8 @@ const client = new Client({
         GatewayIntentBits.GuildEmojisAndStickers,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent
-    ]
+    ],
+    rest: discordRestOptions
 });
 
 // 啟用活動相關指令與按鈕
@@ -822,7 +833,21 @@ async function startDiscordBot() {
 
     if (!token) {
         console.warn('⚠️ DISCORD_TOKEN is missing; Discord bot will not start.');
-        return;
+        return false;
+    }
+
+    try {
+        const res = await fetch('https://discord.com/api/v10/gateway/bot', {
+            headers: {
+                Authorization: `Bot ${token}`,
+                'User-Agent': 'DiscordBot (https://github.com/discordjs/discord.js, 14)'
+            },
+            signal: AbortSignal.timeout(10000)
+        });
+        const body = await res.text();
+        console.log(`[discord] GET /api/v10/gateway/bot status=${res.status} body=${body}`);
+    } catch (error) {
+        console.error('❌ Discord GET /api/v10/gateway/bot failed:', error);
     }
 
     const readyTimeout = setTimeout(() => {
@@ -841,10 +866,40 @@ async function startDiscordBot() {
     console.log('🔌 Connecting Discord gateway...');
     try {
         await client.login(token);
+        return true;
     } catch (error) {
         clearTimeout(readyTimeout);
         console.error('❌ Discord login failed:', error);
+        return false;
     }
 }
 
-startDiscordBot();
+function waitUntilReady(timeoutMs = 30000) {
+    if (client.isReady()) return Promise.resolve(true);
+
+    return new Promise(resolve => {
+        const onReady = () => {
+            clearTimeout(timer);
+            resolve(true);
+        };
+
+        const timer = setTimeout(() => {
+            client.off('clientReady', onReady);
+            client.off('ready', onReady);
+            resolve(false);
+        }, timeoutMs);
+
+        client.once('clientReady', onReady);
+        client.once('ready', onReady);
+    });
+}
+
+module.exports = {
+    startDiscordBot,
+    waitUntilReady,
+    client
+};
+
+if (require.main === module) {
+    startDiscordBot();
+}
