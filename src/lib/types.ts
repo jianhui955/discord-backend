@@ -16,6 +16,10 @@ export interface Member {
   introduce: string | null;
   /** 小名列表，DB 存 json/jsonb 数组 */
   nickname: string[] | null;
+  /** Discord 用户 ID（sync-members 写入） */
+  discord_id?: string | null;
+  /** Discord 身份组 ID 列表（sync-members 写入 text[]） */
+  roles?: string[] | null;
   created_at: string;
 }
 
@@ -47,6 +51,20 @@ export interface Channel {
   channel_name: string;
   channel_id: string;
   type: string;
+}
+
+/** Discord 伺服器身份组（roles 表） */
+export interface DiscordRole {
+  id: string;
+  guild_id: string;
+  name: string;
+  color: number;
+  position: number;
+  hoist: boolean;
+  managed: boolean;
+  mentionable: boolean;
+  icon: string | null;
+  unicode_emoji: string | null;
 }
 
 export interface BirthdayReminderTemplate {

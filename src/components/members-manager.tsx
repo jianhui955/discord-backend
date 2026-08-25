@@ -4,6 +4,7 @@ import { useActionState, useEffect, useMemo, useState } from "react";
 import {
   ROLE_LABELS,
   STATUS_LABELS,
+  type DiscordRole,
   type Member,
   type MemberRole,
   type MemberStatus,
@@ -39,20 +40,38 @@ function dobMonthDayKey(dob: string | null | undefined): number | null {
   return (date.getMonth() + 1) * 100 + date.getDate();
 }
 
-export function MembersManager({ members }: { members: Member[] }) {
+export function MembersManager({
+  members,
+  discordRoles,
+}: {
+  members: Member[];
+  discordRoles: DiscordRole[];
+}) {
   const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<MemberStatus | "">("active");
   const [editing, setEditing] = useState<Member | null | undefined>(undefined);
   const [dobSort, setDobSort] = useState<DobSort>("none");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = q
-      ? members.filter(
+    let list = members;
+
+    if (statusFilter) {
+      list = list.filter((m) => m.status === statusFilter);
+    }
+
+    if (roleFilter) {
+      list = list.filter((m) => m.roles?.includes(roleFilter));
+    }
+
+    list = q
+      ? list.filter(
           (m) =>
             m.username.toLowerCase().includes(q) ||
             (m.email ?? "").toLowerCase().includes(q),
         )
-      : members;
+      : list;
 
     if (dobSort === "none") return list;
 
@@ -65,7 +84,7 @@ export function MembersManager({ members }: { members: Member[] }) {
       const diff = ka - kb;
       return dobSort === "asc" ? diff : -diff;
     });
-  }, [members, query, dobSort]);
+  }, [members, query, roleFilter, statusFilter, dobSort]);
 
   function cycleDobSort() {
     setDobSort((prev) =>
@@ -78,18 +97,46 @@ export function MembersManager({ members }: { members: Member[] }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative sm:w-72">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.3-4.3M17 10.5a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0Z" />
-            </svg>
-          </span>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索用户名或邮箱…"
-            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
-          />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative sm:w-72">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+              <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.3-4.3M17 10.5a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0Z" />
+              </svg>
+            </span>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="搜索用户名或邮箱…"
+              className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+            />
+          </div>
+
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200 sm:min-w-[180px]"
+          >
+            <option value="">全部身份组</option>
+            {discordRoles.map((role) => (
+              <option key={role.id} value={role.id}>
+                {role.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as MemberStatus | "")}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200 sm:min-w-[140px]"
+          >
+            <option value="">全部状态</option>
+            {STATUS_OPTIONS.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
         </div>
 
         <button

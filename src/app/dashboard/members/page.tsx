@@ -1,21 +1,39 @@
 import { createClient } from "@/lib/supabase/server";
 import { normalizeNicknames } from "@/lib/member-nickname";
-import type { Member } from "@/lib/types";
+import type { DiscordRole, Member } from "@/lib/types";
 import { MembersManager } from "@/components/members-manager";
 
 export const dynamic = "force-dynamic";
 
 export default async function MembersPage() {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("members")
-    .select("*")
-    .order("created_at", { ascending: false });
 
-  const members = ((data ?? []) as Record<string, unknown>[]).map((row) => ({
-    ...(row as unknown as Member),
-    nickname: normalizeNicknames(row.nickname),
-  }));
+  const [membersResult, rolesResult] = await Promise.all([
+    supabase
+      .from("members")
+      .select("*")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("roles")
+      .select("id, guild_id, name, color, position, hoist, managed, mentionable, icon, unicode_emoji")
+      .eq("hoist", true)
+      .order("position", { ascending: false }),
+  ]);
+
+  const members = ((membersResult.data ?? []) as Record<string, unknown>[]).map(
+    (row) => ({
+      ...(row as unknown as Member),
+      nickname: normalizeNicknames(row.nickname),
+      roles: Array.isArray(row.roles)
+        ? row.roles.map(String)
+        : row.roles == null
+          ? null
+          : [],
+    }),
+  );
+
+  const discordRoles = (rolesResult.data ?? []) as DiscordRole[];
+  const error = membersResult.error ?? rolesResult.error;
 
   return (
     <div className="space-y-6">
@@ -35,7 +53,7 @@ export default async function MembersPage() {
         </div>
       ) : null}
 
-      <MembersManager members={members} />
+      <MembersManager members={members} discordRoles={discordRoles} />
     </div>
   );
 }
