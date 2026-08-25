@@ -532,7 +532,8 @@ ${record.status}`
                 )
                 .map(member => ({
                     discord_id: member.user.id,
-                    username: member.displayName
+                    username: member.displayName,
+                    roles: [...member.roles.cache.keys()].map(String)
                 }));
 
             const { synced, removed } = await syncMembers(rows);

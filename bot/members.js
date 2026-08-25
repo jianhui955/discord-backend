@@ -34,13 +34,22 @@ async function upsertMembers(members) {
     const toUpdate = [];
 
     for (const member of members) {
+        const roles = Array.isArray(member.roles)
+            ? member.roles.map(String)
+            : [];
+
         if (existingIds.has(String(member.discord_id))) {
-            toUpdate.push(member);
+            toUpdate.push({
+                discord_id: member.discord_id,
+                username: member.username,
+                roles
+            });
         } else {
             toInsert.push({
                 discord_id: member.discord_id,
                 username: member.username,
-                status: 'active'
+                status: 'active',
+                roles
             });
         }
     }
@@ -58,7 +67,8 @@ async function upsertMembers(members) {
             .from('members')
             .update({
                 username: member.username,
-                status: 'active'
+                status: 'active',
+                roles: member.roles
             })
             .eq('discord_id', member.discord_id);
 
