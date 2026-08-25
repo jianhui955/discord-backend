@@ -10,6 +10,7 @@ const { findCode, findExistingCodes, insertCodes, deleteCode, listAllCodes } = r
 const { syncMembers } = require('./members');
 const { syncStickers } = require('./stickers');
 const { syncChannels } = require('./channels');
+const { syncRoles } = require('./roles');
 const {
     setupEventHandlers,
     handleCreateEventSlash,
@@ -70,7 +71,8 @@ const CODE_CHANNEL_COMMANDS = new Set([
 const BOT_CHANNEL_COMMANDS = new Set([
     'sync-members',
     'sync_pic',
-    'sync_channels'
+    'sync_channels',
+    'sync-roles'
 ]);
 
 const ASK_CHANNEL_IDS = new Set([
@@ -267,6 +269,10 @@ async function registerCommands() {
         new SlashCommandBuilder()
             .setName('sync_channels')
             .setDescription('Sync all server channels to the channel table'),
+
+        new SlashCommandBuilder()
+            .setName('sync-roles')
+            .setDescription('Sync all server roles to the roles table'),
 
         new SlashCommandBuilder()
             .setName('ask')
@@ -609,6 +615,37 @@ ${record.status}`
         } catch (error) {
             console.error('sync_channels error:', error?.message || error, error);
             await safeEdit(interaction, '❌ 同步頻道失敗，請稍後再試。');
+        }
+
+        return;
+    }
+
+    if (interaction.commandName === 'sync-roles') {
+        if (!(await safeDefer(interaction, { flags: MessageFlags.Ephemeral }))) return;
+
+        const guild = interaction.guild;
+
+        if (!guild) {
+            await safeEdit(interaction, '❌ 此指令只能在伺服器內使用。');
+            return;
+        }
+
+        try {
+            await guild.roles.fetch();
+
+            const rows = [...guild.roles.cache.values()];
+            const { synced, removed } = await syncRoles(rows);
+
+            let reply = `✅ 已同步 **${synced}** 個身份組到資料庫。`;
+
+            if (removed > 0) {
+                reply += `\n🗑️ 已刪除 **${removed}** 個 Discord 裡已不存在的身份組。`;
+            }
+
+            await safeEdit(interaction, reply);
+        } catch (error) {
+            console.error('sync-roles error:', error?.message || error, error);
+            await safeEdit(interaction, '❌ 同步身份組失敗，請稍後再試。');
         }
 
         return;
