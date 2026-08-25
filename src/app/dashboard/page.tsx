@@ -1,10 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import {
-  ROLE_LABELS,
-  STATUS_LABELS,
-  type Member,
-} from "@/lib/types";
+import { STATUS_LABELS, type Member } from "@/lib/types";
 import { StatusBadge } from "@/components/status-badge";
 
 export const dynamic = "force-dynamic";
@@ -21,8 +17,8 @@ export default async function DashboardPage() {
   const stats = {
     total: members.length,
     active: members.filter((m) => m.status === "active").length,
+    inactive: members.filter((m) => m.status === "inactive").length,
     banned: members.filter((m) => m.status === "banned").length,
-    admins: members.filter((m) => m.role === "admin").length,
   };
 
   const recent = members.slice(0, 5);
@@ -47,7 +43,7 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="成员总数" value={stats.total} accent="brand" />
         <StatCard label="正常成员" value={stats.active} accent="green" />
-        <StatCard label="管理员" value={stats.admins} accent="indigo" />
+        <StatCard label="未激活" value={stats.inactive} accent="indigo" />
         <StatCard label="已封禁" value={stats.banned} accent="red" />
       </div>
 
@@ -86,12 +82,7 @@ export default async function DashboardPage() {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500">
-                    {ROLE_LABELS[m.role]}
-                  </span>
-                  <StatusBadge status={m.status} label={STATUS_LABELS[m.status]} />
-                </div>
+                <StatusBadge status={m.status} label={STATUS_LABELS[m.status]} />
               </li>
             ))}
           </ul>

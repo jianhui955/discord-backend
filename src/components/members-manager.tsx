@@ -2,11 +2,9 @@
 
 import { useActionState, useEffect, useMemo, useState } from "react";
 import {
-  ROLE_LABELS,
   STATUS_LABELS,
   type DiscordRole,
   type Member,
-  type MemberRole,
   type MemberStatus,
 } from "@/lib/types";
 import {
@@ -18,7 +16,6 @@ import { StatusBadge } from "@/components/status-badge";
 import { formatDate, formatDateTime, toDateInputValue } from "@/lib/format";
 import { formatNicknamesInput } from "@/lib/member-nickname";
 
-const ROLE_OPTIONS = Object.entries(ROLE_LABELS) as [MemberRole, string][];
 const STATUS_OPTIONS = Object.entries(STATUS_LABELS) as [MemberStatus, string][];
 
 type DobSort = "none" | "asc" | "desc";
@@ -170,7 +167,6 @@ export function MembersManager({
                     </span>
                   </button>
                 </th>
-                <th className="px-5 py-3 font-medium">角色</th>
                 <th className="px-5 py-3 font-medium">状态</th>
                 <th className="px-5 py-3 font-medium">创建时间</th>
                 <th className="px-5 py-3 text-right font-medium">操作</th>
@@ -179,7 +175,7 @@ export function MembersManager({
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center text-slate-400">
+                  <td colSpan={6} className="px-5 py-12 text-center text-slate-400">
                     没有匹配的成员
                   </td>
                 </tr>
@@ -201,9 +197,6 @@ export function MembersManager({
                     </td>
                     <td className="px-5 py-3.5 text-slate-500" suppressHydrationWarning>
                       {formatDate(m.dob)}
-                    </td>
-                    <td className="px-5 py-3.5 text-slate-600">
-                      {ROLE_LABELS[m.role]}
                     </td>
                     <td className="px-5 py-3.5">
                       <StatusBadge status={m.status} label={STATUS_LABELS[m.status]} />
@@ -346,35 +339,19 @@ function MemberModal({
             />
           </Field>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="角色">
-              <select
-                name="role"
-                defaultValue={member?.role ?? "member"}
-                className={inputClass}
-              >
-                {ROLE_OPTIONS.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <Field label="状态">
-              <select
-                name="status"
-                defaultValue={member?.status ?? "active"}
-                className={inputClass}
-              >
-                {STATUS_OPTIONS.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
+          <Field label="状态">
+            <select
+              name="status"
+              defaultValue={member?.status ?? "active"}
+              className={inputClass}
+            >
+              {STATUS_OPTIONS.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </Field>
 
           <Field label="备注">
             <textarea
