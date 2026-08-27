@@ -632,14 +632,15 @@ async function askStep(interaction, channel, userId, prompt) {
     return { message, text };
 }
 
-async function handleCreateEventSlash(interaction, allowedChannelIds) {
+async function handleCreateEventSlash(interaction, allowedChannelIds, publishChannelId) {
     const allowed = new Set(
         (Array.isArray(allowedChannelIds) ? allowedChannelIds : [allowedChannelIds])
             .map(id => String(id))
     );
-    const eventChannelId = String(interaction.channelId);
+    const commandChannelId = String(interaction.channelId);
+    const eventChannelId = String(publishChannelId || interaction.channelId);
 
-    if (!allowed.has(eventChannelId)) {
+    if (!allowed.has(commandChannelId)) {
         const channelMentions = [...allowed].map(id => `<#${id}>`).join('、');
         await interaction.reply({
             content: `❌ 此指令只能在 ${channelMentions} 使用。`,
@@ -900,16 +901,6 @@ async function handleEventRoleButton(interaction) {
     const currentEmbed = interaction.message.embeds?.[0];
     const organizerName = getEmbedFieldValue(currentEmbed, '發起人') || '未知';
 
-    // 先刪除舊的訊息，再發布新的活動訊息
-    try {
-        // 刪除原本的活動訊息
-        await interaction.message.delete();
-    } catch (err) {
-        // 若訊息已不存在也略過錯誤
-        console.warn('刪除舊訊息時出現問題:', err);
-    }
-
-    // 重新建立 embed
     const embed = buildEventEmbed({
         title: eventRow.title || '活動',
         content: eventRow.content || '',
@@ -921,23 +912,71 @@ async function handleEventRoleButton(interaction) {
         members
     });
 
-    // 取得頻道再發送新訊息
-    const channel = interaction.client.channels.cache.get(eventRow.channel_id || interaction.channelId);
-    if (!channel || !channel.send) {
+    const components = buildRoleButtons(eventId, gameRoles);
+
+    // 先發新訊息再刪舊的，讓最新活動帖排在頻道最下方
+    // 點按鈕時優先用 interaction.channel（最可靠），再 fallback 到 DB / fetch
+    let channel = interaction.channel;
+    const channelId = String(
+        eventRow.channel_id || interaction.channelId || ''
+    );
+
+    if (
+        (!channel || typeof channel.send !== 'function') &&
+        channelId
+    ) {
+        channel = interaction.client.channels.cache.get(channelId) || null;
+    }
+
+    if ((!channel || typeof channel.send !== 'function') && channelId) {
+        try {
+            channel = await interaction.client.channels.fetch(channelId);
+        } catch (fetchError) {
+            console.error('找不到原始活動頻道，無法發布新訊息:', fetchError);
+            await safeReply(interaction, {
+                content: '❌ 報名已寫入資料庫，但更新活動訊息失敗（找不到頻道）。請用 `/repost` 重新發布。',
+                flags: MessageFlags.Ephemeral
+            });
+            return;
+        }
+    }
+
+    if (!channel || typeof channel.send !== 'function') {
         console.error('找不到原始活動頻道，無法發布新訊息');
+        await safeReply(interaction, {
+            content: '❌ 報名已寫入資料庫，但更新活動訊息失敗（找不到頻道）。請用 `/repost` 重新發布。',
+            flags: MessageFlags.Ephemeral
+        });
         return;
     }
 
-    const sent = await channel.send({
-        embeds: [embed],
-        components: buildRoleButtons(eventId, gameRoles)
-    });
+    let sent;
+    try {
+        sent = await channel.send({
+            embeds: [embed],
+            components
+        });
+    } catch (sendError) {
+        console.error('發送新活動訊息失敗:', sendError);
+        await safeReply(interaction, {
+            content: '❌ 報名已寫入資料庫，但發送新活動訊息失敗。舊訊息不會刪除。',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
 
-    // 更新資料庫的 message_id 為新訊息
     await supabase
         .from('event')
-        .update({ message_id: String(sent.id) })
+        .update({
+            message_id: String(sent.id),
+            channel_id: String(channel.id)
+        })
         .eq('id', eventId);
+
+    // 新訊息成功後才刪舊訊息
+    await interaction.message.delete().catch((err) => {
+        console.warn('刪除舊活動訊息失敗:', err?.message || err);
+    });
 }
 
 function setupEventHandlers(client) {
@@ -1022,6 +1061,152 @@ function setupEventHandlers(client) {
     });
 }
 
+async function handleRepostSlash(interaction, allowedChannelIds, publishChannelId) {
+    const allowed = new Set(
+        (Array.isArray(allowedChannelIds) ? allowedChannelIds : [allowedChannelIds])
+            .map(id => String(id))
+    );
+    const targetChannelId = String(publishChannelId || interaction.channelId);
+
+    if (!allowed.has(String(interaction.channelId))) {
+        const channelMentions = [...allowed].map(id => `<#${id}>`).join('、');
+        await interaction.reply({
+            content: `❌ 此指令只能在 ${channelMentions} 使用。`,
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    const eventGuildIdRaw = interaction.options.getString('id', true).trim();
+    const eventGuildId = Number(eventGuildIdRaw);
+
+    if (!Number.isFinite(eventGuildId)) {
+        await interaction.reply({
+            content: '❌ 請輸入有效的 `event_guild` id（數字）。',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    try {
+        const { data: eventGuild, error: guildError } = await supabase
+            .from('event_guild')
+            .select('id, event_id, date, time, member')
+            .eq('id', eventGuildId)
+            .single();
+
+        if (guildError || !eventGuild) {
+            await interaction.editReply(`❌ 找不到 event_guild id = **${eventGuildIdRaw}**。`);
+            return;
+        }
+
+        const { data: eventRow, error: eventError } = await supabase
+            .from('event')
+            .select('id, title, content, message_id, channel_id, created_at')
+            .eq('id', eventGuild.event_id)
+            .single();
+
+        if (eventError || !eventRow) {
+            await interaction.editReply(
+                `❌ 找不到對應的 event（event_id = **${eventGuild.event_id}**）。`
+            );
+            return;
+        }
+
+        const gameRoles = await fetchGameRoles();
+        if (gameRoles.length === 0) {
+            await interaction.editReply('❌ `game_role` 表沒有資料，請先新增職業/角色。');
+            return;
+        }
+
+        let organizerName =
+            interaction.member?.displayName || interaction.user.username || '未知';
+
+        // 若舊訊息還在，嘗試沿用原本發起人
+        if (eventRow.message_id && eventRow.channel_id) {
+            try {
+                const oldChannel = await interaction.client.channels.fetch(eventRow.channel_id);
+                if (oldChannel?.isTextBased?.()) {
+                    const oldMessage = await oldChannel.messages.fetch(String(eventRow.message_id));
+                    const fromEmbed = getEmbedFieldValue(oldMessage.embeds?.[0], '發起人');
+                    if (fromEmbed) organizerName = fromEmbed;
+                }
+            } catch {
+                // 舊訊息找不到就略過
+            }
+        }
+
+        const targetChannel = await interaction.client.channels
+            .fetch(targetChannelId)
+            .catch(() => null);
+
+        if (!targetChannel || typeof targetChannel.send !== 'function') {
+            await interaction.editReply(`❌ 找不到發布頻道 <#${targetChannelId}>。`);
+            return;
+        }
+
+        const embed = buildEventEmbed({
+            title: eventRow.title || '活動',
+            content: eventRow.content || '',
+            organizerName,
+            createdAt: eventRow.created_at || new Date(),
+            eventDate: eventGuild.date,
+            eventTime: eventGuild.time,
+            gameRoles,
+            members: eventGuild.member
+        });
+
+        // 按鈕仍綁 event.id（與報名邏輯一致）
+        const components = buildRoleButtons(eventRow.id, gameRoles);
+
+        const sent = await targetChannel.send({
+            embeds: [embed],
+            components
+        });
+
+        const { error: updateError } = await supabase
+            .from('event')
+            .update({
+                message_id: String(sent.id),
+                channel_id: String(targetChannel.id)
+            })
+            .eq('id', eventRow.id);
+
+        if (updateError) throw updateError;
+
+        // 新訊息發成功後，盡量刪掉舊訊息
+        if (
+            eventRow.message_id &&
+            String(eventRow.message_id) !== String(sent.id)
+        ) {
+            try {
+                const oldChannelId = eventRow.channel_id || targetChannel.id;
+                const oldChannel =
+                    oldChannelId === targetChannel.id
+                        ? targetChannel
+                        : await interaction.client.channels.fetch(oldChannelId);
+                if (oldChannel?.isTextBased?.()) {
+                    const oldMessage = await oldChannel.messages.fetch(String(eventRow.message_id));
+                    await oldMessage.delete();
+                }
+            } catch (deleteError) {
+                console.warn('repost 刪除舊訊息失敗:', deleteError?.message || deleteError);
+            }
+        }
+
+        await interaction.editReply(
+            `✅ 已重新發布場次 **#${eventGuild.id}** 到 <#${targetChannel.id}>。`
+        );
+    } catch (error) {
+        console.error('repost 指令錯誤:', error);
+        await interaction.editReply(
+            `❌ 重新發布失敗：${error.message || '未知錯誤'}`
+        ).catch(() => {});
+    }
+}
+
 function isCreatingEvent(userId) {
     return creatingEventUsers.has(String(userId));
 }
@@ -1029,6 +1214,7 @@ function isCreatingEvent(userId) {
 module.exports = {
     setupEventHandlers,
     handleCreateEventSlash,
+    handleRepostSlash,
     setupEventReminders,
     isCreatingEvent
 };

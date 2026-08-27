@@ -14,6 +14,7 @@ const { syncRoles } = require('./roles');
 const {
     setupEventHandlers,
     handleCreateEventSlash,
+    handleRepostSlash,
     // setupEventReminders,
     isCreatingEvent
 } = require('./event');
@@ -257,6 +258,16 @@ async function registerCommands() {
         new SlashCommandBuilder()
             .setName('create-event')
             .setDescription('Create a new event announcement step by step'),
+
+        new SlashCommandBuilder()
+            .setName('repost')
+            .setDescription('Repost an event by event_guild id')
+            .addStringOption(option =>
+                option
+                    .setName('id')
+                    .setDescription('event_guild id')
+                    .setRequired(true)
+            ),
 
         new SlashCommandBuilder()
             .setName('sync-members')
@@ -505,10 +516,20 @@ ${record.status}`
     }
 
     if (interaction.commandName === 'create-event') {
-        await handleCreateEventSlash(interaction, [
-            BOT_CHANNEL_ID,
+        await handleCreateEventSlash(
+            interaction,
+            [BOT_CHANNEL_ID],
             CREATE_EVENT_CHANNEL_ID
-        ]);
+        );
+        return;
+    }
+
+    if (interaction.commandName === 'repost') {
+        await handleRepostSlash(
+            interaction,
+            [BOT_CHANNEL_ID],
+            CREATE_EVENT_CHANNEL_ID
+        );
         return;
     }
 
