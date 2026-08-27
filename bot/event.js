@@ -302,6 +302,24 @@ function getEmbedFieldValue(embed, fieldName) {
     return embed?.fields?.find(field => field.name.includes(fieldName))?.value || null;
 }
 
+function getDateKeyInTimezone(dateInput, timeZone = EVENT_TIMEZONE) {
+    const value = dateInput instanceof Date ? dateInput : new Date(dateInput);
+    if (Number.isNaN(value.getTime())) return null;
+
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).format(value);
+}
+
+function isSameCalendarDay(dateA, dateB, timeZone = EVENT_TIMEZONE) {
+    const keyA = getDateKeyInTimezone(dateA, timeZone);
+    const keyB = getDateKeyInTimezone(dateB, timeZone);
+    return Boolean(keyA && keyB && keyA === keyB);
+}
+
 // Discord 會依「最寬那一行」決定 embed 寬度；普通空格幾乎無效
 // Hangul Filler 看起來空白，但能撐開寬度
 const EMBED_WIDTH_SPACER = '\u3164'.repeat(60);
@@ -858,7 +876,7 @@ async function handleEventRoleButton(interaction) {
 
     const { data: guildRows, error: guildError } = await supabase
         .from('event_guild')
-        .select('id, date, time, member')
+        .select('id, date, time, member, updated_at')
         .eq('event_id', eventId)
         .order('id', { ascending: false })
         .limit(1);
@@ -867,6 +885,9 @@ async function handleEventRoleButton(interaction) {
 
     const eventGuild = guildRows?.[0];
     if (!eventGuild) return;
+
+    const previousUpdatedAt = eventGuild.updated_at || eventRow.created_at;
+    const shouldEdit = isSameCalendarDay(previousUpdatedAt, new Date());
 
     const gameRoles = await fetchGameRoles();
     const selectedRole = gameRoles.find(role => Number(role.id) === gameRoleId);
@@ -893,7 +914,10 @@ async function handleEventRoleButton(interaction) {
 
     const { error: updateError } = await supabase
         .from('event_guild')
-        .update({ member: members })
+        .update({
+            member: members,
+            updated_at: new Date().toISOString()
+        })
         .eq('id', eventGuild.id);
 
     if (updateError) throw updateError;
@@ -914,12 +938,8 @@ async function handleEventRoleButton(interaction) {
 
     const components = buildRoleButtons(eventId, gameRoles);
 
-    const messageDate = getEmbedFieldValue(currentEmbed, '日期');
-    const isSameDate =
-        String(messageDate || '').trim() === String(eventGuild.date || '').trim();
-
-    // 同一天場次：直接 edit 原訊息
-    if (isSameDate) {
+    // updated_at 與今天同一天：edit；跨日才重新發布
+    if (shouldEdit) {
         try {
             await interaction.message.edit({
                 embeds: [embed],
@@ -936,7 +956,6 @@ async function handleEventRoleButton(interaction) {
     }
 
     // 不同日期：先發新訊息再刪舊的，讓最新活動帖排在頻道最下方
-    // 點按鈕時優先用 interaction.channel（最可靠），再 fallback 到 DB / fetch
     let channel = interaction.channel;
     const channelId = String(
         eventRow.channel_id || interaction.channelId || ''
