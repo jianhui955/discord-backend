@@ -7,7 +7,7 @@ const MAX_VISION_IMAGES = 20;
 const MAX_VISION_IMAGE_BYTES = 8 * 1024 * 1024;
 const VISION_IMAGE_EXT_RE = /\.(jpe?g|png|webp)(?:\?|#|$)/i;
 
-const SUMMARY_SYSTEM_PROMPT = `你是一名 Discord 頻道聊天紀錄總結助手。請根據提供的聊天紀錄與附帶圖片，使用繁體中文整理重點：
+const SUMMARY_SYSTEM_PROMPT = `你是一名 Discord 頻道聊天紀錄總結助手。大家玩的遊戲是煙雲十六聲。請根據提供的聊天紀錄與附帶圖片，使用中文整理重點：
 
 1. 八卦/主要話題：大家主要在聊什麼瓜或話題（1~3 個重點）。
 2. 關鍵發言与爆料人：格式為 [用戶名]：發言重點。提煉發言人的關鍵觀點、爆料內容或精辟言論，忽略無意義閒聊。
@@ -228,6 +228,9 @@ async function fetchChannelHistoryMessages(channel, limit = HISTORY_LIMIT) {
         if (batch.length === 0) break;
 
         for (const message of batch) {
+            // summary 只收真人發言，略過機器人
+            if (message.author?.bot) continue;
+
             if (selected.length === 0) {
                 selected.push(message);
                 continue;
