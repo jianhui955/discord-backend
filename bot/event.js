@@ -886,8 +886,8 @@ async function handleEventRoleButton(interaction) {
     const eventGuild = guildRows?.[0];
     if (!eventGuild) return;
 
-    const previousUpdatedAt = eventGuild.updated_at || eventRow.created_at;
-    const shouldEdit = isSameCalendarDay(previousUpdatedAt, new Date());
+    // const previousUpdatedAt = eventGuild.updated_at || eventRow.created_at;
+    // const shouldEdit = isSameCalendarDay(previousUpdatedAt, new Date());
 
     const gameRoles = await fetchGameRoles();
     const selectedRole = gameRoles.find(role => Number(role.id) === gameRoleId);
@@ -938,23 +938,25 @@ async function handleEventRoleButton(interaction) {
 
     const components = buildRoleButtons(eventId, gameRoles);
 
+    // 暫時一律 edit；跨日 repost 邏輯先保留
     // updated_at 與今天同一天：edit；跨日才重新發布
-    if (shouldEdit) {
-        try {
-            await interaction.message.edit({
-                embeds: [embed],
-                components
-            });
-        } catch (editError) {
-            console.error('更新活動訊息失敗:', editError);
-            await safeReply(interaction, {
-                content: '❌ 報名已寫入資料庫，但更新活動訊息失敗。請用 `/repost` 重新發布。',
-                flags: MessageFlags.Ephemeral
-            });
-        }
-        return;
+    // if (shouldEdit) {
+    try {
+        await interaction.message.edit({
+            embeds: [embed],
+            components
+        });
+    } catch (editError) {
+        console.error('更新活動訊息失敗:', editError);
+        await safeReply(interaction, {
+            content: '❌ 報名已寫入資料庫，但更新活動訊息失敗。請用 `/repost` 重新發布。',
+            flags: MessageFlags.Ephemeral
+        });
     }
+    return;
+    // }
 
+    /*
     // 不同日期：先發新訊息再刪舊的，讓最新活動帖排在頻道最下方
     let channel = interaction.channel;
     const channelId = String(
@@ -1017,6 +1019,7 @@ async function handleEventRoleButton(interaction) {
     await interaction.message.delete().catch((err) => {
         console.warn('刪除舊活動訊息失敗:', err?.message || err);
     });
+    */
 }
 
 function setupEventHandlers(client) {

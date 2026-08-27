@@ -32,6 +32,7 @@ const GUILD_ID = '1483850659240480848';
 const CODE_REPLY_EMOJI = '<:00011:1520793326075515050>';
 const BOT_CHANNEL_ID = '1521745408794165278';
 const CREATE_EVENT_CHANNEL_ID = '1489088135659913326';
+const NAVIGATION_CHANNEL_ID = '1538833195351539744';
 const EVENT_CHANNEL_ID = '1514618700320211025';//1514618700320211025
 const MEMBER_ROLE_ID = '1483850659240480857';
 const TIMEZONE = 'Asia/Kuala_Lumpur';
@@ -528,7 +529,7 @@ ${record.status}`
         await handleRepostSlash(
             interaction,
             [BOT_CHANNEL_ID],
-            CREATE_EVENT_CHANNEL_ID
+            NAVIGATION_CHANNEL_ID
         );
         return;
     }
