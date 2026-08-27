@@ -914,7 +914,28 @@ async function handleEventRoleButton(interaction) {
 
     const components = buildRoleButtons(eventId, gameRoles);
 
-    // 先發新訊息再刪舊的，讓最新活動帖排在頻道最下方
+    const messageDate = getEmbedFieldValue(currentEmbed, '日期');
+    const isSameDate =
+        String(messageDate || '').trim() === String(eventGuild.date || '').trim();
+
+    // 同一天場次：直接 edit 原訊息
+    if (isSameDate) {
+        try {
+            await interaction.message.edit({
+                embeds: [embed],
+                components
+            });
+        } catch (editError) {
+            console.error('更新活動訊息失敗:', editError);
+            await safeReply(interaction, {
+                content: '❌ 報名已寫入資料庫，但更新活動訊息失敗。請用 `/repost` 重新發布。',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+        return;
+    }
+
+    // 不同日期：先發新訊息再刪舊的，讓最新活動帖排在頻道最下方
     // 點按鈕時優先用 interaction.channel（最可靠），再 fallback 到 DB / fetch
     let channel = interaction.channel;
     const channelId = String(
@@ -1077,12 +1098,12 @@ async function handleRepostSlash(interaction, allowedChannelIds, publishChannelI
         return;
     }
 
-    const eventGuildIdRaw = interaction.options.getString('id', true).trim();
-    const eventGuildId = Number(eventGuildIdRaw);
+    const eventIdRaw = interaction.options.getString('id', true).trim();
+    const eventId = Number(eventIdRaw);
 
-    if (!Number.isFinite(eventGuildId)) {
+    if (!Number.isFinite(eventId)) {
         await interaction.reply({
-            content: '❌ 請輸入有效的 `event_guild` id（數字）。',
+            content: '❌ 請輸入有效的 `event` id（數字）。',
             flags: MessageFlags.Ephemeral
         });
         return;
@@ -1091,26 +1112,30 @@ async function handleRepostSlash(interaction, allowedChannelIds, publishChannelI
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
-        const { data: eventGuild, error: guildError } = await supabase
-            .from('event_guild')
-            .select('id, event_id, date, time, member')
-            .eq('id', eventGuildId)
-            .single();
-
-        if (guildError || !eventGuild) {
-            await interaction.editReply(`❌ 找不到 event_guild id = **${eventGuildIdRaw}**。`);
-            return;
-        }
-
         const { data: eventRow, error: eventError } = await supabase
             .from('event')
             .select('id, title, content, message_id, channel_id, created_at')
-            .eq('id', eventGuild.event_id)
+            .eq('id', eventId)
             .single();
 
         if (eventError || !eventRow) {
+            await interaction.editReply(`❌ 找不到 event id = **${eventIdRaw}**。`);
+            return;
+        }
+
+        const { data: guildRows, error: guildError } = await supabase
+            .from('event_guild')
+            .select('id, date, time, member')
+            .eq('event_id', eventId)
+            .order('id', { ascending: false })
+            .limit(1);
+
+        if (guildError) throw guildError;
+
+        const eventGuild = guildRows?.[0];
+        if (!eventGuild) {
             await interaction.editReply(
-                `❌ 找不到對應的 event（event_id = **${eventGuild.event_id}**）。`
+                `❌ event **#${eventId}** 沒有對應的 event_guild 場次。`
             );
             return;
         }
@@ -1197,7 +1222,7 @@ async function handleRepostSlash(interaction, allowedChannelIds, publishChannelI
         }
 
         await interaction.editReply(
-            `✅ 已重新發布場次 **#${eventGuild.id}** 到 <#${targetChannel.id}>。`
+            `✅ 已重新發布活動 **#${eventRow.id}** 到 <#${targetChannel.id}>。`
         );
     } catch (error) {
         console.error('repost 指令錯誤:', error);

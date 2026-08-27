@@ -261,11 +261,11 @@ async function registerCommands() {
 
         new SlashCommandBuilder()
             .setName('repost')
-            .setDescription('Repost an event by event_guild id')
+            .setDescription('Repost an event by event id')
             .addStringOption(option =>
                 option
                     .setName('id')
-                    .setDescription('event_guild id')
+                    .setDescription('event id')
                     .setRequired(true)
             ),
 
