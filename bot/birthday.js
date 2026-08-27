@@ -37,7 +37,8 @@ async function getBirthdayMembersToday() {
     const { data, error } = await supabase
         .from('members')
         .select('username, discord_id, dob')
-        .not('dob', 'is', null);
+        .not('dob', 'is', null)
+        .eq('status', 'active');
 
     if (error) throw error;
 

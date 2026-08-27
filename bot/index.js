@@ -526,10 +526,7 @@ ${record.status}`
             await guild.members.fetch();
 
             const rows = [...guild.members.cache.values()]
-                .filter(member =>
-                    !member.user.bot &&
-                    member.roles.cache.has(MEMBER_ROLE_ID)
-                )
+                .filter(member => !member.user.bot)
                 .map(member => ({
                     discord_id: member.user.id,
                     username: member.displayName,
@@ -538,11 +535,12 @@ ${record.status}`
 
             const { synced, removed } = await syncMembers(rows);
 
-            let reply = `✅ 已同步 **${synced}** 位成員到資料庫（僅含 <@&${MEMBER_ROLE_ID}> 身份組）。`;
+            let reply = `✅ 已同步 **${synced}** 位成員到資料庫。`;
 
             if (removed > 0) {
                 reply += `\n⏸️ 已將 **${removed}** 位不再擁有該身份組的成員標記為 inactive。`;
             }
+       
 
             await safeEdit(interaction, reply);
         } catch (error) {
