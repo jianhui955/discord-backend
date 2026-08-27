@@ -900,6 +900,16 @@ async function handleEventRoleButton(interaction) {
     const currentEmbed = interaction.message.embeds?.[0];
     const organizerName = getEmbedFieldValue(currentEmbed, '發起人') || '未知';
 
+    // 先刪除舊的訊息，再發布新的活動訊息
+    try {
+        // 刪除原本的活動訊息
+        await interaction.message.delete();
+    } catch (err) {
+        // 若訊息已不存在也略過錯誤
+        console.warn('刪除舊訊息時出現問題:', err);
+    }
+
+    // 重新建立 embed
     const embed = buildEventEmbed({
         title: eventRow.title || '活動',
         content: eventRow.content || '',
@@ -911,10 +921,23 @@ async function handleEventRoleButton(interaction) {
         members
     });
 
-    await interaction.message.edit({
+    // 取得頻道再發送新訊息
+    const channel = interaction.client.channels.cache.get(eventRow.channel_id || interaction.channelId);
+    if (!channel || !channel.send) {
+        console.error('找不到原始活動頻道，無法發布新訊息');
+        return;
+    }
+
+    const sent = await channel.send({
         embeds: [embed],
         components: buildRoleButtons(eventId, gameRoles)
     });
+
+    // 更新資料庫的 message_id 為新訊息
+    await supabase
+        .from('event')
+        .update({ message_id: String(sent.id) })
+        .eq('id', eventId);
 }
 
 function setupEventHandlers(client) {
