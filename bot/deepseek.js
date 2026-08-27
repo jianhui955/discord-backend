@@ -1,4 +1,5 @@
 const DEEPSEEK_MODEL = 'deepseek-v4-flash';
+const DEEPSEEK_VISION_MODEL = 'deepseek-v4-flash-vision-exp';
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
 
 const SYSTEM_PERSONA =
@@ -8,7 +9,30 @@ function getDeepSeekApiKey() {
     return process.env.DEEPSEEK_API_KEY || '';
 }
 
-function toDeepSeekMessages(question, history = [], systemPrompt = SYSTEM_PERSONA) {
+function buildUserContent(question, images = []) {
+    const imageUrls = (Array.isArray(images) ? images : [])
+        .map(url => String(url || '').trim())
+        .filter(Boolean);
+
+    if (imageUrls.length === 0) {
+        return question;
+    }
+
+    return [
+        { type: 'text', text: question },
+        ...imageUrls.map(url => ({
+            type: 'image_url',
+            image_url: { url }
+        }))
+    ];
+}
+
+function toDeepSeekMessages(
+    question,
+    history = [],
+    systemPrompt = SYSTEM_PERSONA,
+    images = []
+) {
     const messages = [
         { role: 'system', content: systemPrompt }
     ];
@@ -23,13 +47,21 @@ function toDeepSeekMessages(question, history = [], systemPrompt = SYSTEM_PERSON
 
     messages.push({
         role: 'user',
-        content: question
+        content: buildUserContent(question, images)
     });
 
     return messages;
 }
 
-async function askDeepSeek(question, { history = [], systemPrompt = SYSTEM_PERSONA } = {}) {
+async function askDeepSeek(
+    question,
+    {
+        history = [],
+        systemPrompt = SYSTEM_PERSONA,
+        model = DEEPSEEK_MODEL,
+        images = []
+    } = {}
+) {
     const prompt = String(question || '').trim();
 
     if (!prompt) {
@@ -49,8 +81,8 @@ async function askDeepSeek(question, { history = [], systemPrompt = SYSTEM_PERSO
             Authorization: `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-            model: DEEPSEEK_MODEL,
-            messages: toDeepSeekMessages(prompt, history, systemPrompt),
+            model,
+            messages: toDeepSeekMessages(prompt, history, systemPrompt, images),
             stream: false
         })
     });
@@ -73,6 +105,7 @@ async function askDeepSeek(question, { history = [], systemPrompt = SYSTEM_PERSO
 
 module.exports = {
     DEEPSEEK_MODEL,
+    DEEPSEEK_VISION_MODEL,
     SYSTEM_PERSONA,
     askDeepSeek
 };

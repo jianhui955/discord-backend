@@ -1,10 +1,12 @@
-const { askDeepSeek } = require('./deepseek');
+const { askDeepSeek, DEEPSEEK_MODEL, DEEPSEEK_VISION_MODEL } = require('./deepseek');
 
 const HISTORY_LIMIT = 100;
 const MESSAGE_CONTENT_LIMIT = 300;
 const MAX_MESSAGE_GAP_MS = 30 * 60 * 1000;
+const MAX_VISION_IMAGES = 20;
+const VISION_IMAGE_EXT_RE = /\.(jpe?g|png|webp)(?:\?|#|$)/i;
 
-const SUMMARY_SYSTEM_PROMPT = `你是一名 Discord 頻道聊天紀錄總結助手。請根據提供的聊天紀錄，使用繁體中文整理重點：
+const SUMMARY_SYSTEM_PROMPT = `你是一名 Discord 頻道聊天紀錄總結助手。請根據提供的聊天紀錄與附帶圖片，使用繁體中文整理重點：
 
 1. 八卦/主要話題：大家主要在聊什麼瓜或話題（1~3 個重點）。
 2. 關鍵發言与爆料人：格式為 [用戶名]：發言重點。提煉發言人的關鍵觀點、爆料內容或精辟言論，忽略無意義閒聊。
@@ -12,6 +14,7 @@ const SUMMARY_SYSTEM_PROMPT = `你是一名 Discord 頻道聊天紀錄總結助�
 
 【處理原則】
 - 自動過濾打招呼、無意義灌水、貼圖與重複訊息。
+- 聊天紀錄中的 [圖片N] 對應你收到的第 N 張圖片，請閱讀圖片內容並納入總結。
 - 保持簡潔清楚，優先使用條列式呈現，語言風格輕鬆接地氣。
 - 「關鍵發言與爆料人」的 [用戶名] 必須完整沿用聊天紀錄裡的發送者名稱，禁止縮寫、改寫或發明暱稱。`;
 
@@ -21,9 +24,49 @@ function truncateText(text, maxLength = MESSAGE_CONTENT_LIMIT) {
     return `${value.slice(0, maxLength - 1)}…`;
 }
 
-function describeAttachment(attachment) {
+function createImageCollector(maxImages = MAX_VISION_IMAGES) {
+    const urls = [];
+
+    return {
+        urls,
+        take(url) {
+            const value = String(url || '').trim();
+            if (!value || urls.length >= maxImages) return null;
+            urls.push(value);
+            return `[圖片${urls.length}]`;
+        }
+    };
+}
+
+function isSupportedVisionImage({ contentType = '', url = '', name = '' } = {}) {
+    const type = String(contentType || '').toLowerCase();
+    if (
+        type === 'image/jpeg' ||
+        type === 'image/jpg' ||
+        type === 'image/png' ||
+        type === 'image/webp'
+    ) {
+        return true;
+    }
+
+    const target = `${name} ${url}`.toLowerCase();
+    return VISION_IMAGE_EXT_RE.test(target);
+}
+
+function claimVisionImage(url, contentType, name, collector) {
+    if (!collector || !isSupportedVisionImage({ contentType, url, name })) {
+        return null;
+    }
+    return collector.take(url);
+}
+
+function describeAttachment(attachment, collector) {
     const contentType = String(attachment.contentType || '').toLowerCase();
     const name = String(attachment.name || '').toLowerCase();
+    const url = attachment.proxyURL || attachment.url || '';
+
+    const visionTag = claimVisionImage(url, contentType, name, collector);
+    if (visionTag) return visionTag;
 
     if (contentType.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(name)) {
         return '此处是图片';
@@ -36,17 +79,29 @@ function describeAttachment(attachment) {
     return null;
 }
 
-function extractMediaPlaceholders(message) {
+function iterAttachments(messageLike) {
+    const attachments = messageLike?.attachments;
+    if (!attachments) return [];
+    if (typeof attachments.values === 'function') return [...attachments.values()];
+    if (Array.isArray(attachments)) return attachments;
+    return [];
+}
+
+function extractMediaPlaceholders(messageLike, collector) {
     const parts = [];
 
-    for (const attachment of message.attachments.values()) {
-        const label = describeAttachment(attachment);
+    for (const attachment of iterAttachments(messageLike)) {
+        const label = describeAttachment(attachment, collector);
         if (label) parts.push(label);
     }
 
-    for (const embed of message.embeds || []) {
+    for (const embed of messageLike?.embeds || []) {
         if (embed.image || embed.thumbnail) {
-            parts.push('此处是图片');
+            const url = embed.image?.proxyURL || embed.image?.url
+                || embed.thumbnail?.proxyURL || embed.thumbnail?.url
+                || '';
+            const visionTag = claimVisionImage(url, '', url, collector);
+            parts.push(visionTag || '此处是图片');
         }
         if (embed.video) {
             parts.push('此处是视频');
@@ -54,6 +109,26 @@ function extractMediaPlaceholders(message) {
     }
 
     return parts;
+}
+
+function getMessageSnapshots(message) {
+    const snapshots = message?.messageSnapshots;
+    if (!snapshots) return [];
+    if (typeof snapshots.values === 'function') return [...snapshots.values()];
+    if (Array.isArray(snapshots)) return snapshots;
+    return [];
+}
+
+function collectContentAndMedia(messageLike, collector) {
+    const pieces = [];
+    const body = String(messageLike?.content || '').trim();
+
+    if (body) {
+        pieces.push(truncateText(body));
+    }
+
+    pieces.push(...extractMediaPlaceholders(messageLike, collector));
+    return pieces;
 }
 
 function resolveAuthorName(message, memberById = new Map()) {
@@ -68,19 +143,17 @@ function resolveAuthorName(message, memberById = new Map()) {
     );
 }
 
-function formatMessageLine(message, memberById = new Map()) {
+function formatMessageLine(message, memberById = new Map(), collector = null) {
     const authorName = resolveAuthorName(message, memberById);
+    const pieces = collectContentAndMedia(message, collector);
 
-    const mediaParts = extractMediaPlaceholders(message);
-    let body = String(message.content || '').trim();
-
-    if (body) {
-        body = truncateText(body);
+    // Discord 原生轉發：原文／原圖在 messageSnapshots
+    for (const snapshot of getMessageSnapshots(message)) {
+        const snapPieces = collectContentAndMedia(snapshot, collector);
+        if (snapPieces.length > 0) {
+            pieces.push(`[轉發] ${snapPieces.join(' ')}`);
+        }
     }
-
-    const pieces = [];
-    if (body) pieces.push(body);
-    if (mediaParts.length > 0) pieces.push(...mediaParts);
 
     if (pieces.length === 0) {
         return null;
@@ -136,7 +209,7 @@ async function loadMemberDisplayNames(guild, messages) {
     return memberById;
 }
 
-async function fetchChannelHistoryLines(channel, limit = HISTORY_LIMIT) {
+async function fetchChannelHistoryMessages(channel, limit = HISTORY_LIMIT) {
     const DISCORD_FETCH_MAX = 100;
     const selected = [];
     let before = undefined;
@@ -179,12 +252,22 @@ async function fetchChannelHistoryLines(channel, limit = HISTORY_LIMIT) {
         before = batch[batch.length - 1].id;
     }
 
-    const chronological = selected.reverse();
-    const memberById = await loadMemberDisplayNames(channel.guild, chronological);
+    return selected.reverse();
+}
 
-    return chronological
-        .map(message => formatMessageLine(message, memberById))
+async function fetchChannelHistoryLines(channel, limit = HISTORY_LIMIT) {
+    const chronological = await fetchChannelHistoryMessages(channel, limit);
+    const memberById = await loadMemberDisplayNames(channel.guild, chronological);
+    const collector = createImageCollector(MAX_VISION_IMAGES);
+
+    const lines = chronological
+        .map(message => formatMessageLine(message, memberById, collector))
         .filter(Boolean);
+
+    return {
+        lines,
+        images: collector.urls
+    };
 }
 
 async function summarizeChannel(channel) {
@@ -196,20 +279,25 @@ async function summarizeChannel(channel) {
         throw new Error('此頻道無法讀取歷史訊息。');
     }
 
-    const lines = await fetchChannelHistoryLines(channel, HISTORY_LIMIT);
+    const { lines, images } = await fetchChannelHistoryLines(channel, HISTORY_LIMIT);
 
     if (lines.length === 0) {
         return '這個頻道最近沒有可總結的文字訊息。';
     }
 
     const transcript = lines.join('\n');
+    const imageHint = images.length > 0
+        ? `聊天中的 [圖片1]~[圖片${images.length}] 依序對應你收到的圖片，請一併閱讀後總結。`
+        : '';
     const prompt =
         `以下是 Discord 頻道「${channel.name || channel.id}」最近 ${lines.length} 條訊息（格式：發送者: 內容）。` +
-        `請幫我做總結。\n\n${transcript}`;
+        `${imageHint}請幫我做總結。\n\n${transcript}`;
 
     return askDeepSeek(prompt, {
         history: [],
-        systemPrompt: SUMMARY_SYSTEM_PROMPT
+        systemPrompt: SUMMARY_SYSTEM_PROMPT,
+        model: images.length > 0 ? DEEPSEEK_VISION_MODEL : DEEPSEEK_MODEL,
+        images
     });
 }
 
@@ -217,6 +305,7 @@ module.exports = {
     HISTORY_LIMIT,
     MESSAGE_CONTENT_LIMIT,
     MAX_MESSAGE_GAP_MS,
+    MAX_VISION_IMAGES,
     SUMMARY_SYSTEM_PROMPT,
     summarizeChannel,
     formatMessageLine,
