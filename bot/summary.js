@@ -4,6 +4,7 @@ const HISTORY_LIMIT = 100;
 const MESSAGE_CONTENT_LIMIT = 300;
 const MAX_MESSAGE_GAP_MS = 30 * 60 * 1000;
 const MAX_VISION_IMAGES = 20;
+const MAX_VISION_IMAGE_BYTES = 8 * 1024 * 1024;
 const VISION_IMAGE_EXT_RE = /\.(jpe?g|png|webp)(?:\?|#|$)/i;
 
 const SUMMARY_SYSTEM_PROMPT = `你是一名 Discord 頻道聊天紀錄總結助手。請根據提供的聊天紀錄與附帶圖片，使用繁體中文整理重點：
@@ -270,6 +271,97 @@ async function fetchChannelHistoryLines(channel, limit = HISTORY_LIMIT) {
     };
 }
 
+function guessMimeFromUrl(url) {
+    const value = String(url || '').toLowerCase();
+    if (value.includes('.png')) return 'image/png';
+    if (value.includes('.webp')) return 'image/webp';
+    if (value.includes('.jpg') || value.includes('.jpeg')) return 'image/jpeg';
+    return 'image/jpeg';
+}
+
+function normalizeImageMime(contentType, url) {
+    const type = String(contentType || '').split(';')[0].trim().toLowerCase();
+    if (
+        type === 'image/jpeg' ||
+        type === 'image/jpg' ||
+        type === 'image/png' ||
+        type === 'image/webp'
+    ) {
+        return type === 'image/jpg' ? 'image/jpeg' : type;
+    }
+    return guessMimeFromUrl(url);
+}
+
+async function downloadImageAsDataUrl(url) {
+    const response = await fetch(url, {
+        headers: {
+            // Discord CDN 對外部抓取較嚴；用常見 UA，由 bot 端下載較穩
+            'User-Agent': 'Mozilla/5.0 (compatible; DiscordBot)'
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length === 0) {
+        throw new Error('empty image');
+    }
+    if (buffer.length > MAX_VISION_IMAGE_BYTES) {
+        throw new Error(`image too large (${buffer.length} bytes)`);
+    }
+
+    const mime = normalizeImageMime(response.headers.get('content-type'), url);
+    return `data:${mime};base64,${buffer.toString('base64')}`;
+}
+
+async function resolveVisionImages(imageUrls, transcript) {
+    let nextTranscript = String(transcript || '');
+    const resolved = [];
+
+    // 先把成功／失敗結果記下來；從大編號替換，避免 [圖片1] 誤傷 [圖片10]
+    const outcomes = [];
+
+    for (let i = 0; i < imageUrls.length; i += 1) {
+        try {
+            const dataUrl = await downloadImageAsDataUrl(imageUrls[i]);
+            outcomes.push({ index: i, ok: true, dataUrl });
+        } catch (error) {
+            console.warn(`無法下載總結圖片 #${i + 1}:`, error?.message || error);
+            outcomes.push({ index: i, ok: false });
+        }
+    }
+
+    let nextNumber = 1;
+    for (let i = imageUrls.length - 1; i >= 0; i -= 1) {
+        const oldTag = `[圖片${i + 1}]`;
+        const outcome = outcomes[i];
+
+        if (!outcome.ok) {
+            nextTranscript = nextTranscript.split(oldTag).join('此处是图片');
+            continue;
+        }
+
+        // 暫時換成唯一佔位，稍後再編成連續編號
+        nextTranscript = nextTranscript.split(oldTag).join(`[[VISION_${i}]]`);
+    }
+
+    for (const outcome of outcomes) {
+        if (!outcome.ok) continue;
+        const tempTag = `[[VISION_${outcome.index}]]`;
+        const newTag = `[圖片${nextNumber}]`;
+        nextTranscript = nextTranscript.split(tempTag).join(newTag);
+        resolved.push(outcome.dataUrl);
+        nextNumber += 1;
+    }
+
+    return {
+        transcript: nextTranscript,
+        images: resolved
+    };
+}
+
 async function summarizeChannel(channel) {
     if (!channel || !channel.isTextBased()) {
         throw new Error('此頻道不支援讀取訊息。');
@@ -285,9 +377,13 @@ async function summarizeChannel(channel) {
         return '這個頻道最近沒有可總結的文字訊息。';
     }
 
-    const transcript = lines.join('\n');
-    const imageHint = images.length > 0
-        ? `聊天中的 [圖片1]~[圖片${images.length}] 依序對應你收到的圖片，請一併閱讀後總結。`
+    const { transcript, images: visionImages } = await resolveVisionImages(
+        images,
+        lines.join('\n')
+    );
+
+    const imageHint = visionImages.length > 0
+        ? `聊天中的 [圖片1]~[圖片${visionImages.length}] 依序對應你收到的圖片，請一併閱讀後總結。`
         : '';
     const prompt =
         `以下是 Discord 頻道「${channel.name || channel.id}」最近 ${lines.length} 條訊息（格式：發送者: 內容）。` +
@@ -296,8 +392,8 @@ async function summarizeChannel(channel) {
     return askDeepSeek(prompt, {
         history: [],
         systemPrompt: SUMMARY_SYSTEM_PROMPT,
-        model: images.length > 0 ? DEEPSEEK_VISION_MODEL : DEEPSEEK_MODEL,
-        images
+        model: visionImages.length > 0 ? DEEPSEEK_VISION_MODEL : DEEPSEEK_MODEL,
+        images: visionImages
     });
 }
 
