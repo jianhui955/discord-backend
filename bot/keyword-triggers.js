@@ -99,35 +99,50 @@ function shouldTriggerByPercentage(percentage) {
     return Math.random() * 100 < rate;
 }
 
-function parseKeywordParts(keyword) {
-    return [...new Set(
-        String(keyword || '')
-            .split(/[,，]/)
-            .map(part => part.trim())
-            .filter(Boolean)
-    )];
+/**
+ * 逗号（, / ，）= AND；竖线（| / ｜）= OR
+ * 例：测试，晚安｜goodnight → 须包含「测试」且（「晚安」或「goodnight」其一）
+ */
+function parseKeywordGroups(keyword) {
+    return String(keyword || '')
+        .split(/[,，]/)
+        .map(segment => segment.trim())
+        .filter(Boolean)
+        .map(segment => [...new Set(
+            segment.split(/[|｜]/)
+                .map(part => part.trim())
+                .filter(Boolean)
+        )])
+        .filter(group => group.length > 0);
 }
 
-function contentMatchesKeywordParts(content, parts) {
-    const text = normalizeForMatch(content);
-    if (!text || !Array.isArray(parts) || parts.length === 0) return false;
+function flattenKeywordGroups(groups) {
+    return (groups || []).flat();
+}
 
-    return parts.every(part => {
-        const key = normalizeForMatch(part);
-        return key && text.includes(key);
-    });
+function contentMatchesKeywordGroups(content, groups) {
+    const text = normalizeForMatch(content);
+    if (!text || !Array.isArray(groups) || groups.length === 0) return false;
+
+    return groups.every(orGroup =>
+        orGroup.some(part => {
+            const key = normalizeForMatch(part);
+            return key && text.includes(key);
+        })
+    );
 }
 
 function contentIncludesKeyword(content, keyword) {
-    return contentMatchesKeywordParts(content, parseKeywordParts(keyword));
+    return contentMatchesKeywordGroups(content, parseKeywordGroups(keyword));
 }
 
 function compareTriggerPriority(a, b) {
-    const partDiff = (b.keyword_parts?.length || 0) - (a.keyword_parts?.length || 0);
-    if (partDiff !== 0) return partDiff;
+    const groupDiff = (b.keyword_groups?.length || 0) - (a.keyword_groups?.length || 0);
+    if (groupDiff !== 0) return groupDiff;
 
     const totalLengthDiff =
-        (b.keyword_parts || []).join('').length - (a.keyword_parts || []).join('').length;
+        flattenKeywordGroups(b.keyword_groups).join('').length
+        - flattenKeywordGroups(a.keyword_groups).join('').length;
     if (totalLengthDiff !== 0) return totalLengthDiff;
 
     return String(b.keyword || '').length - String(a.keyword || '').length;
@@ -150,14 +165,14 @@ async function fetchActiveTriggers() {
     cache = {
         fetchedAt: now,
         rows: (data || []).map(row => {
-            const keyword_parts = parseKeywordParts(row.keyword);
+            const keyword_groups = parseKeywordGroups(row.keyword);
             return {
                 ...row,
-                keyword_parts,
+                keyword_groups,
                 channel_ids: normalizeChannelIds(row.channel_ids),
                 percentage: normalizePercentage(row.percentage)
             };
-        }).filter(row => row.keyword_parts.length > 0)
+        }).filter(row => row.keyword_groups.length > 0)
     };
 
     return cache.rows;
@@ -204,7 +219,7 @@ function findMatchingTrigger(channelId, content) {
 
     for (const row of cache.rows) {
         if (!row.channel_ids.includes(channelKey)) continue;
-        if (!contentMatchesKeywordParts(content, row.keyword_parts)) continue;
+        if (!contentMatchesKeywordGroups(content, row.keyword_groups)) continue;
         matches.push(row);
     }
 
@@ -414,7 +429,8 @@ module.exports = {
     normalizeNicknameList,
     findMentionedMembersByNickname,
     fetchMembersNicknameIndex,
-    parseKeywordParts,
+    parseKeywordGroups,
     contentIncludesKeyword,
-    contentMatchesKeywordParts
+    contentMatchesKeywordGroups,
+    flattenKeywordGroups
 };
