@@ -99,13 +99,38 @@ function shouldTriggerByPercentage(percentage) {
     return Math.random() * 100 < rate;
 }
 
-function contentIncludesKeyword(content, keyword) {
+function parseKeywordParts(keyword) {
+    return [...new Set(
+        String(keyword || '')
+            .split(/[,，]/)
+            .map(part => part.trim())
+            .filter(Boolean)
+    )];
+}
+
+function contentMatchesKeywordParts(content, parts) {
     const text = normalizeForMatch(content);
-    const key = normalizeForMatch(String(keyword || '').trim());
+    if (!text || !Array.isArray(parts) || parts.length === 0) return false;
 
-    if (!text || !key) return false;
+    return parts.every(part => {
+        const key = normalizeForMatch(part);
+        return key && text.includes(key);
+    });
+}
 
-    return text.includes(key);
+function contentIncludesKeyword(content, keyword) {
+    return contentMatchesKeywordParts(content, parseKeywordParts(keyword));
+}
+
+function compareTriggerPriority(a, b) {
+    const partDiff = (b.keyword_parts?.length || 0) - (a.keyword_parts?.length || 0);
+    if (partDiff !== 0) return partDiff;
+
+    const totalLengthDiff =
+        (b.keyword_parts || []).join('').length - (a.keyword_parts || []).join('').length;
+    if (totalLengthDiff !== 0) return totalLengthDiff;
+
+    return String(b.keyword || '').length - String(a.keyword || '').length;
 }
 
 async function fetchActiveTriggers() {
@@ -124,11 +149,15 @@ async function fetchActiveTriggers() {
 
     cache = {
         fetchedAt: now,
-        rows: (data || []).map(row => ({
-            ...row,
-            channel_ids: normalizeChannelIds(row.channel_ids),
-            percentage: normalizePercentage(row.percentage)
-        }))
+        rows: (data || []).map(row => {
+            const keyword_parts = parseKeywordParts(row.keyword);
+            return {
+                ...row,
+                keyword_parts,
+                channel_ids: normalizeChannelIds(row.channel_ids),
+                percentage: normalizePercentage(row.percentage)
+            };
+        }).filter(row => row.keyword_parts.length > 0)
     };
 
     return cache.rows;
@@ -175,13 +204,13 @@ function findMatchingTrigger(channelId, content) {
 
     for (const row of cache.rows) {
         if (!row.channel_ids.includes(channelKey)) continue;
-        if (!contentIncludesKeyword(content, row.keyword)) continue;
+        if (!contentMatchesKeywordParts(content, row.keyword_parts)) continue;
         matches.push(row);
     }
 
     if (matches.length === 0) return null;
 
-    matches.sort((a, b) => String(b.keyword).length - String(a.keyword).length);
+    matches.sort(compareTriggerPriority);
     return matches[0];
 }
 
@@ -384,5 +413,8 @@ module.exports = {
     buildSystemPrompt,
     normalizeNicknameList,
     findMentionedMembersByNickname,
-    fetchMembersNicknameIndex
+    fetchMembersNicknameIndex,
+    parseKeywordParts,
+    contentIncludesKeyword,
+    contentMatchesKeywordParts
 };
