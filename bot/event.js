@@ -12,7 +12,7 @@ const EVENT_TIMEZONE = 'Asia/Hong_Kong';
 const BUTTON_PREFIX = 'event_role_';
 const EVENT_PARTICIPANT_ROLE_ID = '1483850659240480851';
 const BOT_CHANNEL_ID = '1521745408794165278';
-const RACING_PARTNER_EMOJI = '<:duckdatui:1543145057282957383>';
+const RACING_PARTNER_EMOJI = '<a:duckdatui:1543145057282957383>';
 
 function isExpiredInteraction(error) {
     return error?.code === 10062 || error?.code === 40060;
