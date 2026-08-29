@@ -1353,10 +1353,113 @@ function isCreatingEvent(userId) {
     return creatingEventUsers.has(String(userId));
 }
 
+async function handleSyncRacingRolesFromEventGuild12(interaction) {
+    if (!(await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral }))) return;
+
+    const guild = interaction.guild;
+    const finishSilently = async () => {
+        await interaction.deleteReply().catch(() => {});
+    };
+
+    if (!guild) {
+        console.warn('sync-racing-roles-12: 不在伺服器內');
+        await finishSilently();
+        return;
+    }
+
+    const EVENT_GUILD_ID = 12;
+
+    try {
+        const { data: eventGuild, error: fetchError } = await supabase
+            .from('event_guild')
+            .select('member')
+            .eq('id', EVENT_GUILD_ID)
+            .single();
+
+        if (fetchError) throw fetchError;
+        if (!eventGuild) {
+            console.warn(`sync-racing-roles-12: 找不到 event_guild #${EVENT_GUILD_ID}`);
+            await finishSilently();
+            return;
+        }
+
+        const targetUserIds = memberUserIds(eventGuild.member);
+        if (targetUserIds.length === 0) {
+            console.warn(`sync-racing-roles-12: event_guild #${EVENT_GUILD_ID} member 為空`);
+            await finishSilently();
+            return;
+        }
+
+        await guild.members.fetch().catch(() => {});
+
+        let removed = 0;
+        const removeFailed = [];
+
+        for (const member of guild.members.cache.values()) {
+            if (member.user.bot) continue;
+            if (!member.roles.cache.has(EVENT_PARTICIPANT_ROLE_ID)) continue;
+
+            try {
+                await member.roles.remove(EVENT_PARTICIPANT_ROLE_ID);
+                removed += 1;
+            } catch (error) {
+                removeFailed.push(`${member.id}: ${error?.message || error}`);
+            }
+        }
+
+        let added = 0;
+        const addFailed = [];
+        const missing = [];
+
+        for (const userId of targetUserIds) {
+            let member = guild.members.cache.get(userId);
+            if (!member) {
+                member = await guild.members.fetch(userId).catch(() => null);
+            }
+
+            if (!member) {
+                missing.push(userId);
+                continue;
+            }
+
+            if (member.roles.cache.has(EVENT_PARTICIPANT_ROLE_ID)) {
+                added += 1;
+                continue;
+            }
+
+            try {
+                await member.roles.add(EVENT_PARTICIPANT_ROLE_ID);
+                added += 1;
+            } catch (error) {
+                addFailed.push(`${userId}: ${error?.message || error}`);
+            }
+        }
+
+        console.log(
+            `sync-racing-roles-12 完成: 移除 ${removed} 人, 加上 ${added}/${targetUserIds.length} 人`
+        );
+        if (missing.length > 0) {
+            console.warn(`sync-racing-roles-12 不在伺服器: ${missing.join(', ')}`);
+        }
+        if (removeFailed.length > 0) {
+            console.warn(`sync-racing-roles-12 移除失敗: ${removeFailed.join(' | ')}`);
+        }
+        if (addFailed.length > 0) {
+            console.warn(`sync-racing-roles-12 加上失敗: ${addFailed.join(' | ')}`);
+        }
+
+        await finishSilently();
+    } catch (error) {
+        console.error('sync-racing-roles-12 失敗:', error);
+        await finishSilently();
+    }
+}
+
 module.exports = {
     setupEventHandlers,
     handleCreateEventSlash,
     handleRepostSlash,
+    handleSyncRacingRolesFromEventGuild12,
     setupEventReminders,
     isCreatingEvent
 };

@@ -15,6 +15,7 @@ const {
     setupEventHandlers,
     handleCreateEventSlash,
     handleRepostSlash,
+    handleSyncRacingRolesFromEventGuild12,
     // setupEventReminders,
     isCreatingEvent
 } = require('./event');
@@ -38,6 +39,7 @@ const MEMBER_ROLE_ID = '1483850659240480857';
 const TIMEZONE = 'Asia/Kuala_Lumpur';
 const SUMMARY_COOLDOWN_MS = 5 * 60 * 1000;
 const summaryCooldowns = new Map();
+const ONE_TIME_RACING_ROLE_SYNC_COMMAND = 'sync-racing-roles-12';
 
 const HELP_TEXT = `📖 **白雲機器人指令說明**
 
@@ -221,7 +223,7 @@ const client = new Client({
 // 啟用活動相關指令與按鈕
 setupEventHandlers(client);
 
-async function registerCommands() {
+function buildSlashCommandBuilders({ includeOneTimeRacingSync = false } = {}) {
     const commands = [
         new SlashCommandBuilder()
             .setName('ping')
@@ -299,7 +301,27 @@ async function registerCommands() {
         new SlashCommandBuilder()
             .setName('summary')
             .setDescription('Summarize the latest 200 messages in this channel')
-    ].map(command => command.toJSON());
+    ];
+
+    if (includeOneTimeRacingSync) {
+        commands.push(
+            new SlashCommandBuilder()
+                .setName(ONE_TIME_RACING_ROLE_SYNC_COMMAND)
+                .setDescription('One-time: reset 【競速】 role from event_guild #12 members')
+                .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        );
+    }
+
+    return commands;
+}
+
+async function registerCommands({ includeOneTimeRacingSync } = {}) {
+    const shouldIncludeOneTime = includeOneTimeRacingSync ??
+        process.env.REGISTER_ONE_TIME_RACING_SYNC === '1';
+
+    const commands = buildSlashCommandBuilders({
+        includeOneTimeRacingSync: shouldIncludeOneTime
+    }).map(command => command.toJSON());
 
     const rest = new REST({ version: '10' })
         .setToken(process.env.DISCORD_TOKEN);
@@ -531,6 +553,18 @@ ${record.status}`
             [BOT_CHANNEL_ID],
             NAVIGATION_CHANNEL_ID
         );
+        return;
+    }
+
+    if (interaction.commandName === ONE_TIME_RACING_ROLE_SYNC_COMMAND) {
+        await handleSyncRacingRolesFromEventGuild12(interaction);
+
+        try {
+            await registerCommands({ includeOneTimeRacingSync: false });
+            console.log('sync-racing-roles-12: 一次性指令已從 Discord 註銷');
+        } catch (error) {
+            console.error('註銷一次性指令失敗:', error);
+        }
         return;
     }
 
