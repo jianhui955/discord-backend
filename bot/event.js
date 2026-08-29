@@ -11,6 +11,8 @@ const supabase = require('./supabase');
 const EVENT_TIMEZONE = 'Asia/Hong_Kong';
 const BUTTON_PREFIX = 'event_role_';
 const EVENT_PARTICIPANT_ROLE_ID = '1483850659240480851';
+const BOT_CHANNEL_ID = '1521745408794165278';
+const RACING_PARTNER_EMOJI = '<:duckdatui:1543145057282957383>';
 
 function isExpiredInteraction(error) {
     return error?.code === 10062 || error?.code === 40060;
@@ -299,6 +301,25 @@ async function userIsSignedUpForAnyEvent(userId) {
     return (data || []).some(row => memberUserIds(row.member).includes(key));
 }
 
+async function announceRacingPartnerRole(client, userId) {
+    const channel = await client.channels.fetch(BOT_CHANNEL_ID).catch(() => null);
+    if (!channel || typeof channel.send !== 'function') {
+        console.warn(`找不到 BOT 頻道 ${BOT_CHANNEL_ID}，無法發送競速夥伴通知。`);
+        return;
+    }
+
+    const mention = `<@${userId}>`;
+    const content =
+        `新的競速夥伴出現啦！${RACING_PARTNER_EMOJI}\n\n` +
+        `${mention} 剛剛領取了 【競速】 身份組\n` +
+        '有興趣一起跑競速的夥伴，可以找 TA 組隊！';
+
+    await channel.send({
+        content,
+        allowedMentions: { users: [String(userId)] }
+    });
+}
+
 async function syncEventParticipantRole(interaction, userId) {
     const guild = interaction.guild;
     if (!guild) return;
@@ -314,6 +335,12 @@ async function syncEventParticipantRole(interaction, userId) {
 
         if (shouldHaveRole && !hasRole) {
             await member.roles.add(EVENT_PARTICIPANT_ROLE_ID);
+            announceRacingPartnerRole(interaction.client, userId).catch(error => {
+                console.warn(
+                    `發送競速夥伴通知失敗 (${userId}):`,
+                    error?.message || error
+                );
+            });
         } else if (!shouldHaveRole && hasRole) {
             await member.roles.remove(EVENT_PARTICIPANT_ROLE_ID);
         }
