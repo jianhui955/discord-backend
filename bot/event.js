@@ -11,7 +11,7 @@ const supabase = require('./supabase');
 const EVENT_TIMEZONE = 'Asia/Hong_Kong';
 const BUTTON_PREFIX = 'event_role_';
 const EVENT_PARTICIPANT_ROLE_ID = '1483850659240480851';
-const BOT_CHANNEL_ID = '1521745408794165278';
+const RACING_PARTNER_ANNOUNCE_CHANNEL_ID = '1489088135659913326';
 const RACING_PARTNER_EMOJI_ID = '1543145057282957383';
 const RACING_PARTNER_EMOJI_NAME = 'duckdatui';
 
@@ -318,9 +318,11 @@ function userHasEntriesInEventMembers(members, userId) {
 }
 
 async function announceRacingPartnerRole(client, userId, guild) {
-    const channel = await client.channels.fetch(BOT_CHANNEL_ID).catch(() => null);
+    const channel = await client.channels.fetch(RACING_PARTNER_ANNOUNCE_CHANNEL_ID).catch(() => null);
     if (!channel || typeof channel.send !== 'function') {
-        console.warn(`找不到 BOT 頻道 ${BOT_CHANNEL_ID}，無法發送競速夥伴通知。`);
+        console.warn(
+            `找不到競速夥伴通知頻道 ${RACING_PARTNER_ANNOUNCE_CHANNEL_ID}，無法發送通知。`
+        );
         return;
     }
 
