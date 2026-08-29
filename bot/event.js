@@ -10,6 +10,7 @@ const supabase = require('./supabase');
 
 const EVENT_TIMEZONE = 'Asia/Hong_Kong';
 const BUTTON_PREFIX = 'event_role_';
+const EVENT_PARTICIPANT_ROLE_ID = '1483850659240480851';
 
 function isExpiredInteraction(error) {
     return error?.code === 10062 || error?.code === 40060;
@@ -285,6 +286,43 @@ function normalizeMembers(member) {
 
 function memberUserIds(member) {
     return [...new Set(normalizeMembers(member).map(entry => entry.user_id))];
+}
+
+async function userIsSignedUpForAnyEvent(userId) {
+    const { data, error } = await supabase
+        .from('event_guild')
+        .select('member');
+
+    if (error) throw error;
+
+    const key = String(userId);
+    return (data || []).some(row => memberUserIds(row.member).includes(key));
+}
+
+async function syncEventParticipantRole(interaction, userId) {
+    const guild = interaction.guild;
+    if (!guild) return;
+
+    try {
+        const member = interaction.member
+            || await guild.members.fetch(String(userId)).catch(() => null);
+
+        if (!member) return;
+
+        const shouldHaveRole = await userIsSignedUpForAnyEvent(userId);
+        const hasRole = member.roles.cache.has(EVENT_PARTICIPANT_ROLE_ID);
+
+        if (shouldHaveRole && !hasRole) {
+            await member.roles.add(EVENT_PARTICIPANT_ROLE_ID);
+        } else if (!shouldHaveRole && hasRole) {
+            await member.roles.remove(EVENT_PARTICIPANT_ROLE_ID);
+        }
+    } catch (error) {
+        console.warn(
+            `同步活動參加身份組失敗 (${userId}):`,
+            error?.message || error
+        );
+    }
 }
 
 async function fetchGameRoles() {
@@ -922,6 +960,8 @@ async function handleEventRoleButton(interaction) {
 
     if (updateError) throw updateError;
 
+    syncEventParticipantRole(interaction, userId).catch(() => {});
+
     const currentEmbed = interaction.message.embeds?.[0];
     const organizerName = getEmbedFieldValue(currentEmbed, '發起人') || '未知';
 
@@ -1085,6 +1125,8 @@ function setupEventHandlers(client) {
                 .eq('id', eventGuildId);
 
             if (updateError) throw updateError;
+
+            syncEventParticipantRole(interaction, userId).catch(() => {});
 
             await safeEdit(interaction, {
                 content: `🎉 報名成功！你已成功加入場次 **#${eventGuildId}** 的名單。`
