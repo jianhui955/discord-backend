@@ -12,7 +12,29 @@ const EVENT_TIMEZONE = 'Asia/Hong_Kong';
 const BUTTON_PREFIX = 'event_role_';
 const EVENT_PARTICIPANT_ROLE_ID = '1483850659240480851';
 const BOT_CHANNEL_ID = '1521745408794165278';
-const RACING_PARTNER_EMOJI = '<a:duckdatui:1543145057282957383>';
+const RACING_PARTNER_EMOJI_ID = '1543145057282957383';
+const RACING_PARTNER_EMOJI_NAME = 'duckdatui';
+
+async function resolveRacingPartnerEmoji(guild) {
+    if (!guild?.emojis) return '';
+
+    if (guild.emojis.cache.size === 0) {
+        await guild.emojis.fetch().catch(() => {});
+    }
+
+    const emoji =
+        guild.emojis.cache.get(RACING_PARTNER_EMOJI_ID)
+        || guild.emojis.cache.find(item => item.name === RACING_PARTNER_EMOJI_NAME);
+
+    if (!emoji) {
+        console.warn(
+            `競速通知找不到 emoji（id=${RACING_PARTNER_EMOJI_ID}, name=${RACING_PARTNER_EMOJI_NAME}）`
+        );
+        return '';
+    }
+
+    return emoji.toString();
+}
 
 function isExpiredInteraction(error) {
     return error?.code === 10062 || error?.code === 40060;
@@ -295,16 +317,20 @@ function userHasEntriesInEventMembers(members, userId) {
     return normalizeMembers(members).some(entry => entry.user_id === key);
 }
 
-async function announceRacingPartnerRole(client, userId) {
+async function announceRacingPartnerRole(client, userId, guild) {
     const channel = await client.channels.fetch(BOT_CHANNEL_ID).catch(() => null);
     if (!channel || typeof channel.send !== 'function') {
         console.warn(`找不到 BOT 頻道 ${BOT_CHANNEL_ID}，無法發送競速夥伴通知。`);
         return;
     }
 
+    const emojiGuild = guild || channel.guild || null;
+    const emojiText = emojiGuild ? await resolveRacingPartnerEmoji(emojiGuild) : '';
+    const emojiPrefix = emojiText ? `${emojiText} ` : '';
+
     const mention = `<@${userId}>`;
     const content =
-        `新的競速夥伴出現啦！${RACING_PARTNER_EMOJI}\n\n` +
+        `新的競速夥伴出現啦！${emojiPrefix}\n\n` +
         `${mention} 剛剛領取了 【競速】 身份組\n` +
         '有興趣一起跑競速的夥伴，可以找 TA 組隊！';
 
@@ -329,7 +355,7 @@ async function syncEventParticipantRole(interaction, userId, { hasEntriesInThisE
 
         if (hasEntriesInThisEvent && !hasRole) {
             await member.roles.add(EVENT_PARTICIPANT_ROLE_ID);
-            announceRacingPartnerRole(interaction.client, userId).catch(error => {
+            announceRacingPartnerRole(interaction.client, userId, guild).catch(error => {
                 console.warn(
                     `發送競速夥伴通知失敗 (${userId}):`,
                     error?.message || error
