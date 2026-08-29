@@ -290,15 +290,9 @@ function memberUserIds(member) {
     return [...new Set(normalizeMembers(member).map(entry => entry.user_id))];
 }
 
-async function userIsSignedUpForAnyEvent(userId) {
-    const { data, error } = await supabase
-        .from('event_guild')
-        .select('member');
-
-    if (error) throw error;
-
+function userHasEntriesInEventMembers(members, userId) {
     const key = String(userId);
-    return (data || []).some(row => memberUserIds(row.member).includes(key));
+    return normalizeMembers(members).some(entry => entry.user_id === key);
 }
 
 async function announceRacingPartnerRole(client, userId) {
@@ -320,9 +314,10 @@ async function announceRacingPartnerRole(client, userId) {
     });
 }
 
-async function syncEventParticipantRole(interaction, userId) {
+async function syncEventParticipantRole(interaction, userId, { hasEntriesInThisEvent } = {}) {
     const guild = interaction.guild;
     if (!guild) return;
+    if (typeof hasEntriesInThisEvent !== 'boolean') return;
 
     try {
         const member = interaction.member
@@ -330,10 +325,9 @@ async function syncEventParticipantRole(interaction, userId) {
 
         if (!member) return;
 
-        const shouldHaveRole = await userIsSignedUpForAnyEvent(userId);
         const hasRole = member.roles.cache.has(EVENT_PARTICIPANT_ROLE_ID);
 
-        if (shouldHaveRole && !hasRole) {
+        if (hasEntriesInThisEvent && !hasRole) {
             await member.roles.add(EVENT_PARTICIPANT_ROLE_ID);
             announceRacingPartnerRole(interaction.client, userId).catch(error => {
                 console.warn(
@@ -341,7 +335,7 @@ async function syncEventParticipantRole(interaction, userId) {
                     error?.message || error
                 );
             });
-        } else if (!shouldHaveRole && hasRole) {
+        } else if (!hasEntriesInThisEvent && hasRole) {
             await member.roles.remove(EVENT_PARTICIPANT_ROLE_ID);
         }
     } catch (error) {
@@ -987,7 +981,9 @@ async function handleEventRoleButton(interaction) {
 
     if (updateError) throw updateError;
 
-    syncEventParticipantRole(interaction, userId).catch(() => {});
+    syncEventParticipantRole(interaction, userId, {
+        hasEntriesInThisEvent: userHasEntriesInEventMembers(members, userId)
+    }).catch(() => {});
 
     const currentEmbed = interaction.message.embeds?.[0];
     const organizerName = getEmbedFieldValue(currentEmbed, '發起人') || '未知';
@@ -1153,7 +1149,9 @@ function setupEventHandlers(client) {
 
             if (updateError) throw updateError;
 
-            syncEventParticipantRole(interaction, userId).catch(() => {});
+            syncEventParticipantRole(interaction, userId, {
+                hasEntriesInThisEvent: true
+            }).catch(() => {});
 
             await safeEdit(interaction, {
                 content: `🎉 報名成功！你已成功加入場次 **#${eventGuildId}** 的名單。`
