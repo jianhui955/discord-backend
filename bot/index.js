@@ -5,7 +5,7 @@ dns.setDefaultResultOrder('ipv4first');
 require('dotenv').config();
 require('./polyfill-websocket');
 
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, PermissionFlagsBits, MessageFlags, ChannelType } = require('discord.js');
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, PermissionFlagsBits, MessageFlags, ChannelType, Events } = require('discord.js');
 const { findCode, findExistingCodes, insertCodes, deleteCode, listAllCodes } = require('./codes');
 const { syncMembers } = require('./members');
 const { syncStickers } = require('./stickers');
@@ -342,8 +342,19 @@ async function onClientReady() {
     }
 }
 
-client.once('clientReady', onClientReady);
-client.once('ready', onClientReady);
+client.once(Events.ClientReady, onClientReady);
+
+client.on(Events.Error, error => {
+    console.error('❌ Discord client error:', error?.message || error);
+});
+
+client.on(Events.ShardError, error => {
+    console.error('❌ Discord shard error:', error?.message || error);
+});
+
+client.on(Events.Invalidated, () => {
+    console.error('❌ Discord session invalidated (token may be wrong or used elsewhere).');
+});
 
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
@@ -847,10 +858,23 @@ client.on('messageCreate', async (message) => {
     });
 });
 
-if (!process.env.DISCORD_TOKEN) {
+if (!process.env.DISCORD_TOKEN?.trim()) {
     console.warn('⚠️ DISCORD_TOKEN is missing; Discord bot will not start.');
 } else {
-    client.login(process.env.DISCORD_TOKEN).catch(error => {
-        console.error('❌ Discord login failed:', error);
+    const token = process.env.DISCORD_TOKEN.trim();
+    process.env.DISCORD_TOKEN = token;
+
+    console.log('🔌 Connecting to Discord Gateway...');
+
+    client.login(token).catch(error => {
+        console.error('❌ Discord login failed:', error?.message || error, error);
     });
+
+    setTimeout(() => {
+        if (botReady) return;
+        console.error(
+            '❌ Discord bot still not ready after 45s.',
+            `wsStatus=${client.ws?.status ?? 'unknown'}`
+        );
+    }, 45_000);
 }
