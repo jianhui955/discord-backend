@@ -1,6 +1,6 @@
-import { createServerClient, type SupabaseClient } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import type { User } from "@supabase/supabase-js";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 // Public routes that do not require authentication.
 const PUBLIC_PATHS = ["/login", "/auth", "/ping"];
