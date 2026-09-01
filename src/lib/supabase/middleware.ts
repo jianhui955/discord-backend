@@ -1,8 +1,31 @@
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type SupabaseClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import type { User } from "@supabase/supabase-js";
 
 // Public routes that do not require authentication.
 const PUBLIC_PATHS = ["/login", "/auth", "/ping"];
+
+function copyCookies(from: NextResponse, to: NextResponse) {
+  from.cookies.getAll().forEach(({ name, value }) => {
+    to.cookies.set(name, value);
+  });
+}
+
+async function resolveUser(
+  supabase: SupabaseClient,
+): Promise<User | null> {
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (error) {
+      await supabase.auth.signOut();
+      return null;
+    }
+    return data.user;
+  } catch {
+    await supabase.auth.signOut();
+    return null;
+  }
+}
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -32,9 +55,7 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await resolveUser(supabase);
 
   const { pathname } = request.nextUrl;
   const isPublic = PUBLIC_PATHS.some(
@@ -46,7 +67,9 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirect", pathname);
-    return NextResponse.redirect(url);
+    const redirectResponse = NextResponse.redirect(url);
+    copyCookies(supabaseResponse, redirectResponse);
+    return redirectResponse;
   }
 
   // Already signed in and visiting login -> go to dashboard.
@@ -54,7 +77,9 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     url.search = "";
-    return NextResponse.redirect(url);
+    const redirectResponse = NextResponse.redirect(url);
+    copyCookies(supabaseResponse, redirectResponse);
+    return redirectResponse;
   }
 
   return supabaseResponse;
