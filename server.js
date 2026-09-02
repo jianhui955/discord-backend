@@ -1,8 +1,5 @@
-const dns = require("node:dns");
-dns.setDefaultResultOrder("ipv4first");
 require("dotenv").config({ path: ".env.local" });
 require("dotenv").config();
-require("./bot/polyfill-websocket");
 
 const { createServer } = require("http");
 const { parse } = require("url");
@@ -39,20 +36,6 @@ const server = createServer((req, res) => {
 
 server.listen(port, "0.0.0.0", async () => {
   console.log(`🌐 Listening on port ${port}`);
-
-  const discordToken = process.env.DISCORD_TOKEN?.trim();
-
-  if (discordToken) {
-    process.env.DISCORD_TOKEN = discordToken;
-    try {
-      console.log("🤖 Loading Discord bot...");
-      require("./bot/index.js");
-    } catch (error) {
-      console.error("❌ Failed to start Discord bot:", error);
-    }
-  } else {
-    console.warn("⚠️ DISCORD_TOKEN is missing; starting web only.");
-  }
 
   const next = require("next");
   const app = next({ dev: false });

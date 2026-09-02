@@ -14,22 +14,10 @@ services:
       # 固定 Node 版本（Next 15 需要 18.18+ / 20+）
       - key: NODE_VERSION
         value: 22.18.0
-      # Render 上 IPv6 常連不上 Discord Gateway，強制走 IPv4
-      - key: NODE_OPTIONS
-        value: --dns-result-order=ipv4first
       # Supabase 连接信息：在 Render 控制台里填写实际值（不会写入仓库）
       - key: NEXT_PUBLIC_SUPABASE_URL
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
-      # Discord bot（与后台共用同一个 Web Service）
-      - key: DISCORD_TOKEN
-        sync: false
-      - key: CLIENT_ID
-        sync: false
-      - key: DEEPSEEK_API_KEY
-        sync: false
-      - key: GEMINI_API_KEY
         sync: false
