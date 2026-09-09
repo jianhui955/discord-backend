@@ -187,6 +187,108 @@ export function normalizeChannelIds(raw: unknown): string[] {
   return [];
 }
 
+export interface GameRole {
+  id: number;
+  name: string;
+  role: string | null;
+  icon: string | null;
+  color: string | null;
+}
+
+export interface EventSignup {
+  user_id: string;
+  game_role_id: number | null;
+  username: string;
+}
+
+export interface EventGuild {
+  id: string;
+  event_id: string;
+  date: string;
+  time: string | null;
+  member: EventSignup[];
+  reminded: boolean;
+  created_at: string | null;
+}
+
+export interface GuildEvent {
+  id: string;
+  title: string;
+  content: string;
+  channel_id: string | null;
+  message_id: string | null;
+  created_at: string;
+  guilds: EventGuild[];
+}
+
+export function normalizeEventSignups(raw: unknown): EventSignup[] {
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .map((entry) => {
+      if (typeof entry === "string") {
+        const id = entry.trim();
+        return id ? { user_id: id, game_role_id: null, username: id } : null;
+      }
+      if (entry && typeof entry === "object") {
+        const row = entry as Record<string, unknown>;
+        const userId = String(row.user_id ?? "").trim();
+        if (!userId) return null;
+        const roleId = row.game_role_id == null ? null : Number(row.game_role_id);
+        return {
+          user_id: userId,
+          game_role_id: Number.isFinite(roleId) ? roleId : null,
+          username: String(row.username ?? userId),
+        };
+      }
+      return null;
+    })
+    .filter((entry): entry is EventSignup => entry != null);
+}
+
+export function mapEventGuildRow(row: Record<string, unknown>): EventGuild {
+  const remindedRaw = row.reminded;
+  const reminded =
+    typeof remindedRaw === "boolean"
+      ? remindedRaw
+      : Number(remindedRaw) !== 0 &&
+        remindedRaw !== false &&
+        remindedRaw !== "false";
+
+  return {
+    id: String(row.id ?? ""),
+    event_id: String(row.event_id ?? ""),
+    date: String(row.date ?? "").trim(),
+    time: row.time == null ? null : String(row.time).trim() || null,
+    member: normalizeEventSignups(row.member),
+    reminded,
+    created_at: row.created_at != null ? String(row.created_at) : null,
+  };
+}
+
+export function mapGuildEventRow(
+  row: Record<string, unknown>,
+  guilds: EventGuild[] = [],
+): GuildEvent {
+  return {
+    id: String(row.id ?? ""),
+    title: String(row.title ?? "").trim() || "未命名活动",
+    content: String(row.content ?? ""),
+    channel_id: row.channel_id != null ? String(row.channel_id).trim() || null : null,
+    message_id: row.message_id != null ? String(row.message_id).trim() || null : null,
+    created_at: String(row.created_at ?? ""),
+    guilds,
+  };
+}
+
+export function eventSignupCount(guilds: EventGuild[]): number {
+  const ids = new Set<string>();
+  for (const guild of guilds) {
+    for (const member of guild.member) ids.add(member.user_id);
+  }
+  return ids.size;
+}
+
 /** 规范化 keyword_triggers 行 */
 export function mapKeywordTriggerRow(row: Record<string, unknown>): KeywordTrigger {
   const pct = Number(row.percentage);
