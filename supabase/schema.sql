@@ -219,3 +219,50 @@ create policy "authenticated_full_access"
 
 -- 已有表若缺少 channel_id 列，执行：
 -- alter table public.announcements add column if not exists channel_id text;
+
+-- ============================================================
+-- 陪聊（companion_chats）
+-- 每个 channel_id 只能有一条设置。
+-- 打开开关时写入 enabled_at，expires_at = enabled_at + duration_minutes。
+-- Bot：若 enabled 且 expires_at <= now()，把 enabled 改为 false，并清空 enabled_at / expires_at。
+-- ============================================================
+create table if not exists public.companion_chats (
+  id                uuid primary key default gen_random_uuid(),
+  channel_id        text not null unique,
+  prompt            text not null default '',
+  enabled           boolean not null default false,
+  reply_rate        numeric not null default 100,
+  duration_minutes  integer not null default 60,
+  enabled_at        timestamptz,
+  expires_at        timestamptz,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+create index if not exists companion_chats_expires_at_idx
+  on public.companion_chats (expires_at)
+  where enabled = true;
+
+create or replace function public.update_companion_chats_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists update_companion_chats_updated_at on public.companion_chats;
+create trigger update_companion_chats_updated_at
+  before update on public.companion_chats
+  for each row
+  execute function public.update_companion_chats_updated_at();
+
+alter table public.companion_chats enable row level security;
+
+drop policy if exists "authenticated_full_access" on public.companion_chats;
+create policy "authenticated_full_access"
+  on public.companion_chats
+  for all
+  to authenticated
+  using (true)
+  with check (true);

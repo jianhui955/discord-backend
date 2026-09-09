@@ -336,3 +336,46 @@ export function discordStickerUrl(discordId: string, size = 64): string {
   if (/^https?:\/\//i.test(id)) return id;
   return `https://cdn.discordapp.com/emojis/${id}.png?size=${size}`;
 }
+
+/** 陪聊：每个频道一条设置 */
+export interface CompanionChat {
+  id: string;
+  channel_id: string;
+  prompt: string;
+  enabled: boolean;
+  /** 回复频率 0–100 */
+  reply_rate: number;
+  /** 持续时间（分钟） */
+  duration_minutes: number;
+  /** 本次打开开关的时间；关闭时为 null */
+  enabled_at: string | null;
+  /** enabled_at + duration；bot 用 expires_at <= now() 关开关 */
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export function mapCompanionChatRow(row: Record<string, unknown>): CompanionChat {
+  const enabledRaw = row.enabled;
+  const enabled =
+    typeof enabledRaw === "boolean"
+      ? enabledRaw
+      : Number(enabledRaw) !== 0 &&
+        enabledRaw !== false &&
+        enabledRaw !== "false";
+  const rate = Number(row.reply_rate);
+  const duration = Number(row.duration_minutes);
+
+  return {
+    id: String(row.id ?? ""),
+    channel_id: String(row.channel_id ?? "").trim(),
+    prompt: String(row.prompt ?? ""),
+    enabled,
+    reply_rate: Number.isFinite(rate) ? rate : 100,
+    duration_minutes: Number.isFinite(duration) && duration > 0 ? duration : 60,
+    enabled_at: row.enabled_at != null ? String(row.enabled_at) : null,
+    expires_at: row.expires_at != null ? String(row.expires_at) : null,
+    created_at: String(row.created_at ?? ""),
+    updated_at: String(row.updated_at ?? ""),
+  };
+}
