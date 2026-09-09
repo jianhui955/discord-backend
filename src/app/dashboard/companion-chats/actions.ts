@@ -95,9 +95,12 @@ export async function upsertCompanionChat(
   let expiresAt: string | null = null;
 
   if (enabled) {
-    const turningOn = !previousEnabled || !previousEnabledAt;
-    enabledAt = turningOn ? new Date().toISOString() : previousEnabledAt;
-    expiresAt = expiryFrom(enabledAt, duration.value);
+    const startAt =
+      !previousEnabled || !previousEnabledAt
+        ? new Date().toISOString()
+        : previousEnabledAt;
+    enabledAt = startAt;
+    expiresAt = expiryFrom(startAt, duration.value);
   }
 
   const payload = {
