@@ -266,3 +266,30 @@ create policy "authenticated_full_access"
   to authenticated
   using (true)
   with check (true);
+
+-- ============================================================
+-- 陪聊消息（companion_messages）
+-- 每个频道最多参考 50 条；相邻间隔超过 30 分钟视为新会话。
+-- ============================================================
+create table if not exists public.companion_messages (
+  id          bigserial primary key,
+  channel_id  text not null,
+  user_id     text not null,
+  username    text,
+  role        text not null check (role in ('user', 'assistant')),
+  content     text not null,
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists companion_messages_channel_created_idx
+  on public.companion_messages (channel_id, created_at desc);
+
+alter table public.companion_messages enable row level security;
+
+drop policy if exists "authenticated_full_access" on public.companion_messages;
+create policy "authenticated_full_access"
+  on public.companion_messages
+  for all
+  to authenticated
+  using (true)
+  with check (true);
