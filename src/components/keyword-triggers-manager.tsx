@@ -4,6 +4,7 @@ import { useActionState, useEffect, useMemo, useState } from "react";
 import {
   deleteKeywordTrigger,
   toggleKeywordTriggerStatus,
+  toggleVoiceTtsEnabled,
   upsertKeywordTrigger,
   type ActionState,
 } from "@/app/dashboard/keyword-triggers/actions";
@@ -450,6 +451,66 @@ function ChannelGroup({
 
 const inputClass =
   "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200";
+
+export function VoiceTtsSwitch({
+  enabled,
+  missing,
+}: {
+  enabled: boolean;
+  missing: boolean;
+}) {
+  const [state, formAction, pending] = useActionState(
+    toggleVoiceTtsEnabled,
+    initialState,
+  );
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-slate-800">语音 TTS</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            对应 <code className="text-xs">config</code> 表，{" "}
+            <code className="text-xs">name = VOICE_TTS_ENABLED</code>
+          </p>
+        </div>
+
+        <form action={formAction} className="flex items-center gap-3">
+          <input type="hidden" name="enabled" value={enabled ? "false" : "true"} />
+          <span
+            className={`text-sm font-medium ${
+              enabled ? "text-green-600" : "text-slate-400"
+            }`}
+          >
+            {missing ? "未找到" : enabled ? "已开启" : "已关闭"}
+          </span>
+          <button
+            type="submit"
+            disabled={pending || missing}
+            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition ${
+              enabled ? "bg-brand-600" : "bg-slate-300"
+            } disabled:opacity-60`}
+            aria-label={enabled ? "关闭语音 TTS" : "开启语音 TTS"}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
+                enabled ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </form>
+      </div>
+      {missing ? (
+        <p className="mt-3 text-xs text-amber-600">
+          找不到 <code>name = VOICE_TTS_ENABLED</code> 的记录。
+        </p>
+      ) : null}
+      {state.error ? (
+        <p className="mt-3 text-sm text-red-600">{state.error}</p>
+      ) : null}
+    </div>
+  );
+}
 
 function Field({
   label,

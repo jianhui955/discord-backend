@@ -83,6 +83,52 @@ export async function toggleKeywordTriggerStatus(
   revalidatePath(REVALIDATE_PATH);
 }
 
+const VOICE_TTS_CONFIG_NAME = "VOICE_TTS_ENABLED";
+
+function nextConfigStatus(current: unknown, enabled: boolean): boolean | number | string {
+  if (typeof current === "boolean") return enabled;
+  if (typeof current === "number") return enabled ? 1 : 0;
+  if (typeof current === "string") {
+    const value = current.trim().toLowerCase();
+    if (value === "true" || value === "false") return enabled ? "true" : "false";
+    if (value === "on" || value === "off") return enabled ? "on" : "off";
+    if (value === "enabled" || value === "disabled") {
+      return enabled ? "enabled" : "disabled";
+    }
+    return enabled ? "1" : "0";
+  }
+  return enabled ? 1 : 0;
+}
+
+export async function toggleVoiceTtsEnabled(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const enabled = formData.get("enabled") === "true";
+  const supabase = await createClient();
+
+  const { data, error: readError } = await supabase
+    .from("config")
+    .select("status")
+    .eq("name", VOICE_TTS_CONFIG_NAME)
+    .maybeSingle();
+
+  if (readError) return { error: readError.message };
+  if (!data) {
+    return { error: "找不到 config 记录 VOICE_TTS_ENABLED。" };
+  }
+
+  const { error } = await supabase
+    .from("config")
+    .update({ status: nextConfigStatus(data.status, enabled) })
+    .eq("name", VOICE_TTS_CONFIG_NAME);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(REVALIDATE_PATH);
+  return { success: true };
+}
+
 export async function deleteKeywordTrigger(formData: FormData): Promise<void> {
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return;
